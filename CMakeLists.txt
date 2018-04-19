@@ -24,10 +24,13 @@ IF (NOT HAVE_STRFTIME)
   SET (UUCP_NOSTRFTIME TRUE)
 ENDIF ()
 
+FILE (GLOB ucpp_src ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+
 MYPACKAGELIBRARY(
   ${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
   ${INCLUDE_OUTPUT_PATH}/config.h
-  src/marpaESLIF.c)
+  ${ucpp_src})
+ADD_DEFINITIONS("-DUCPP_CONFIG")
 
 ###############
 # Executables #
