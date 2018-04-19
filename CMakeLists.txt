@@ -12,17 +12,53 @@ MYPACKAGESTART (ucpp 1 3 2)
 # Library #
 ###########
 #
-# Amiga ?
+# AMIGA is already set eventually by CMake
 #
 IF (WIN32 AND NOT CYGWIN)
-  SET (UUCP_MSDOS TRUE)
+  SET (MSDOS TRUE)
 ENDIF ()
 
 INCLUDE (CheckFunctionExists)
 CHECK_FUNCTION_EXISTS(strftime HAVE_STRFTIME)
 IF (NOT HAVE_STRFTIME)
-  SET (UUCP_NOSTRFTIME TRUE)
+  SET (NOSTRFTIME TRUE)
 ENDIF ()
+CHECK_FUNCTION_EXISTS(setbuf HAVE_SETBUF)
+IF (NOT HAVE_SETBUF)
+  SET (NO_LIBC_BUF TRUE)
+ENDIF ()
+#
+# Keep ucpp native buffering
+#
+SET (NO_UCPP_BUF FALSE)
+#
+# Do not use mmap considered beta quality by the author
+#
+SET (UCPP_MMAP FALSE)
+#
+# Tokenize pragma
+#
+SET (PRAGMA_TOKENIZE TRUE)
+#
+# PRAGMA dump in non-lexer mode
+#
+SET (PRAGMA_DUMP TRUE)
+#
+# Disable _Pragma() in some directives
+#
+SET (NO_PRAGMA_IN_DIRECTIVE FALSE)
+#
+# Extra space with ##
+#
+SET (DSHARP_TOKEN_MERGE FALSE)
+#
+# Count macro replacements
+#
+SET (INMACRO_FLAG TRUE)
+#
+# STD include path
+#
+SET (STD_INCLUDE_PATH 0)
 
 FILE (GLOB ucpp_src ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
 
@@ -55,7 +91,7 @@ ADD_DEFINITIONS("-DUCPP_CONFIG")
 #############
 # Packaging #
 #############
-MYPACKAGEPACK ("" "UUCP Preprocessor")
+MYPACKAGEPACK ("" "UCPP Preprocessor")
 
 #########
 # Setup #

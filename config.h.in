@@ -47,15 +47,15 @@
  * some paths; define MSDOS on systems with drive letters and using
  * backslashes to seperate directory components.
  */
-#cmakedefine AMIGA @UUCP_AMIGA@
-#cmakedefine MSDOS @UUCP_MSDOS@
+#cmakedefine AMIGA
+#cmakedefine MSDOS
 
 /* ====================================================================== */
 /*
  * Define this if your compiler does not know the strftime() function;
  * TurboC 2.01 under Msdos does not know strftime().
  */
-#cmakedefine NOSTRFTIME @UUCP_NOSTRFTIME@
+#cmakedefine NOSTRFTIME
 
 /* ====================================================================== */
 /*
@@ -67,8 +67,8 @@
  * You can disable one or both of these bufferings by defining the macros
  * NO_LIBC_BUF and NO_UCPP_BUF.
  */
-/* #define NO_LIBC_BUF */
-/* #define NO_UCPP_BUF */
+#cmakedefine NO_LIBC_BUF
+#cmakedefine NO_UCPP_BUF
 
 /*
  * On Unix stations, the system call mmap() might be used on input files.
@@ -85,7 +85,7 @@
  * with files bigger than 4 GB), this option makes ucpp fail to operate
  * on those extremely large files.
  */
-#define UCPP_MMAP
+#cmakedefine UCPP_MMAP
 
 /*
  * Performance issues:
@@ -105,7 +105,7 @@
  * otherwise, it will generate raw string contents. This setting is
  * irrelevant to the stand-alone version of ucpp.
  */
-#define PRAGMA_TOKENIZE
+#cmakedefine PRAGMA_TOKENIZE
 
 /*
  * Define this to the special character that marks the end of tokens with
@@ -123,7 +123,7 @@
  * in its output in non-lexer mode; _Pragma() are translated to equivalent
  * #pragma directives.
  */
-#define PRAGMA_DUMP
+#cmakedefine PRAGMA_DUMP
 
 /*
  * According to my interpretation of the C99 standard, _Pragma() are
@@ -134,7 +134,7 @@
  * as #if, #include and #line. If you want to disable the evaluation of
  * _Pragma() inside such directives, define the following macro.
  */
-/* #define NO_PRAGMA_IN_DIRECTIVE */
+#cmakedefine NO_PRAGMA_IN_DIRECTIVE
 
 /*
  * The C99 standard mandates that the operator `##' must yield a single,
@@ -159,7 +159,7 @@
  * All this is irrelevant to lexer mode; and trying to merge incompatible
  * tokens is a shooting offence, anyway.
  */
-/* #define DSHARP_TOKEN_MERGE */
+#cmakedefine DSHARP_TOKEN_MERGE
 
 /* ====================================================================== */
 /*
@@ -167,7 +167,7 @@
  * that tell whether tokens come from a macro-replacement, and count those
  * macro-replacements.
  */
-/* #define INMACRO_FLAG */
+#cmakedefine INMACRO_FLAG
 
 /* ====================================================================== */
 /*
@@ -178,7 +178,7 @@
  * For Linux, get gcc includes too, or you will miss things like stddef.h.
  * The exact path varies much, depending on the distribution.
  */
-#define STD_INCLUDE_PATH	"/usr/local/include", "/usr/include"
+#define STD_INCLUDE_PATH @STD_INCLUDE_PATH@ /* "/usr/local/include", "/usr/include" */
 
 /* ====================================================================== */
 /*
