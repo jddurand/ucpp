@@ -59,8 +59,59 @@ SET (INMACRO_FLAG TRUE)
 # STD include path
 #
 SET (STD_INCLUDE_PATH 0)
+#
+# For arithmetic, we always use the architecture defined version
+# of int. This is why I added the #include <limits.h> in config.h.in
+#
+# It appears that documentation does not say that SIMUL_NUMBITS should
+# always be defined
+#
+IF (HAVE_SIZEOF_INT)
+  SET (SIMUL_NUMBITS ${SIZEOF_INT})
+ELSE ()
+  SET (SIMUL_NUMBITS sizeof(int))
+ENDIF ()
 
-FILE (GLOB ucpp_src ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+# Arithmetic checks ?
+#
+SET (ARITHMETIC_CHECKS TRUE)
+#
+# Std assert ?
+#
+SET (STD_ASSERT 0)
+#
+# Std hardcoded macros ?
+#
+SET (STD_MACROS 0)
+#
+# POSIX jmp ?
+#
+SET (POSIX_JMP FALSE)
+#
+# Maximum value plus one of a character handled by the lexer
+#
+SET (MAX_CHAR_VAL 128)
+#
+# Unbreakable space ?
+#
+SET (UNBREAKABLE_SPACE FALSE)
+#
+# Whitespace tokens ?
+#
+SET (SEMPER_FIDELIS FALSE)
+
+#
+# Source files
+# Take care: arith.c is included, should never be compiled standalone
+#
+SET (ucpp_src
+  ${CMAKE_CURRENT_SOURCE_DIR}/mem.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/nhash.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/cpp.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/lexer.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/assert.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/macro.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/eval.c)
 
 MYPACKAGELIBRARY(
   ${CMAKE_CURRENT_SOURCE_DIR}/config.h.in

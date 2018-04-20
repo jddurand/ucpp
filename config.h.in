@@ -230,14 +230,28 @@
  */
 
 /*
+ * We always use the architecture defined int
+ */
+#include <limits.h>
+#define ARCH_DEFINED
+#define NATIVE_SIGNED           int
+#define NATIVE_UNSIGNED         unsigned int
+#define NATIVE_UNSIGNED_BITS    sizeof(int)
+#define NATIVE_SIGNED_MIN       (-INT_MAX - 1)
+#define NATIVE_SIGNED_MAX       INT_MIN
+#define SIMUL_ARITH_SUBTYPE     unsigned int
+#define SIMUL_NUMBITS           sizeof(int)
+
+/*
  * For native type evaluation with a 64-bit "long long" type.
  */
+/*
 #define NATIVE_SIGNED           long long
 #define NATIVE_UNSIGNED         unsigned long long
 #define NATIVE_UNSIGNED_BITS    64
 #define NATIVE_SIGNED_MIN       (-9223372036854775807LL - 1)
 #define NATIVE_SIGNED_MAX       9223372036854775807LL
-
+ */
 /*
  * For emulation of a 64-bit type using a native 32-bit "unsigned long"
  * type.
@@ -254,7 +268,7 @@
  * especially multiplications, but this should not be an issue with
  * typical C source code.
  */
-#define ARITHMETIC_CHECKS
+#cmakedefine ARITHMETIC_CHECKS
 
 /* ====================================================================== */
 /*
@@ -278,7 +292,7 @@
  *
  * If you want no standard assertion, define STD_ASSERT to 0.
  */
-#define STD_ASSERT 0
+#cmakedefine STD_ASSERT @STD_ASSERT@
 /*
 #define STD_ASSERT	"cpu(i386)", "machine(i386)", "system(unix)", \
 			"system(freebsd)"
@@ -291,7 +305,7 @@
  * Each string must be either "name" or "name=token-list". If you want
  * no predefined macro, define STD_MACROS to 0.
  */
-#define STD_MACROS 0
+#cmakedefine STD_MACROS @STD_MACROS@
 /*
 #define STD_MACROS	"__FreeBSD=4", "__unix", "__i386", \
 			"__FreeBSD__=4", "__unix__", "__i386__"
@@ -317,7 +331,7 @@
  * This is non-ANSI, but it improves performance on some POSIX system.
  * On typical C source code, such improvement is completely negligeable.
  */
-/* #define POSIX_JMP */
+#cmakedefine POSIX_JMP
 
 /* ====================================================================== */
 /*
@@ -331,14 +345,14 @@
  * that lexer.c defines a static array of size MSTATE * MAX_CHAR_VAL
  * values of type int (MSTATE is defined in lexer.c and is about 40).
  */
-#define MAX_CHAR_VAL	128
+#cmakedefine MAX_CHAR_VAL @MAX_CHAR_VAL@
 
 /*
  * If you want some extra character to be considered as whitespace,
  * define this macro to that space. On ISO-8859-1 machines, 160 is
  * the code for the unbreakable space.
  */
-/* #define UNBREAKABLE_SPACE	160 */
+#cmakedefine UNBREAKABLE_SPACE	@UNBREAKABLE_SPACE@
 
 /*
  * If you want whitespace tokens contents to be recorded (making them
@@ -349,7 +363,7 @@
  * it might slow down a bit ucpp, and with this option, comments will be
  * kept inside #pragma directives).
  */
-/* #define SEMPER_FIDELIS */
+#cmakedefine SEMPER_FIDELIS
 
 /* End of options overridable by UCPP_CONFIG and config.h */
 #endif /* UCPP_CONFIG_H */
