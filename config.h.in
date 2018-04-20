@@ -233,14 +233,15 @@
  * We always use the architecture defined int
  */
 #include <limits.h>
-#define ARCH_DEFINED
 #define NATIVE_SIGNED           int
 #define NATIVE_UNSIGNED         unsigned int
-#define NATIVE_UNSIGNED_BITS    sizeof(int)
+/* C.f. https://stackoverflow.com/questions/3957252/is-there-any-way-to-compute-the-width-of-an-integer-type-at-compile-time/4589384#4589384 */
+#define IMAX_BITS(m) ((m)/((m)%255+1) / 255%255*8 + 7-86/((m)%255+12))
+#define NATIVE_UNSIGNED_BITS    (IMAX_BITS(INT_MAX) + 1)
 #define NATIVE_SIGNED_MIN       (-INT_MAX - 1)
 #define NATIVE_SIGNED_MAX       INT_MIN
 #define SIMUL_ARITH_SUBTYPE     unsigned int
-#define SIMUL_NUMBITS           sizeof(int)
+#define SIMUL_NUMBITS           (IMAX_BITS(INT_MAX) + 1)
 
 /*
  * For native type evaluation with a 64-bit "long long" type.
