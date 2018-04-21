@@ -178,7 +178,7 @@
  * For Linux, get gcc includes too, or you will miss things like stddef.h.
  * The exact path varies much, depending on the distribution.
  */
-#define STD_INCLUDE_PATH @STD_INCLUDE_PATH@ /* "/usr/local/include", "/usr/include" */
+#cmakedefine STD_INCLUDE_PATH @STD_INCLUDE_PATH@ /* "/usr/local/include", "/usr/include" */
 
 /* ====================================================================== */
 /*
@@ -229,19 +229,15 @@
  * sign extension (the result is left-padded with bits set to 1).
  */
 
+#cmakedefine NATIVE_SIGNED      @NATIVE_SIGNED@
+#cmakedefine NATIVE_UNSIGNED    @NATIVE_UNSIGNED@
+#define NATIVE_UNSIGNED_BITS    64
+#define NATIVE_SIGNED_MIN       (-9223372036854775807LL - 1)
+#define NATIVE_SIGNED_MAX       9223372036854775807LL
 /*
- * We always use the architecture defined int
- */
-#include <limits.h>
-#define NATIVE_SIGNED           int
-#define NATIVE_UNSIGNED         unsigned int
-/* C.f. https://stackoverflow.com/questions/3957252/is-there-any-way-to-compute-the-width-of-an-integer-type-at-compile-time/4589384#4589384 */
-#define IMAX_BITS(m) ((m)/((m)%255+1) / 255%255*8 + 7-86/((m)%255+12))
-#define NATIVE_UNSIGNED_BITS    (IMAX_BITS(INT_MAX) + 1)
-#define NATIVE_SIGNED_MIN       (-INT_MAX - 1)
-#define NATIVE_SIGNED_MAX       INT_MIN
 #define SIMUL_ARITH_SUBTYPE     unsigned int
 #define SIMUL_NUMBITS           (IMAX_BITS(INT_MAX) + 1)
+*/
 
 /*
  * For native type evaluation with a 64-bit "long long" type.

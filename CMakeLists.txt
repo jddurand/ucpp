@@ -60,29 +60,43 @@ SET (INMACRO_FLAG TRUE)
 #
 SET (STD_INCLUDE_PATH 0)
 #
-# For arithmetic, we always use the architecture defined version
-# of int. This is why I added the #include <limits.h> in config.h.in
+# For arithmetic, we search which type is 64 bits long.
+# It is assumed that a char is 8 bits.
 #
-# It appears that documentation does not say that SIMUL_NUMBITS should
-# always be defined
-#
-IF (HAVE_SIZEOF_INT)
-  SET (SIMUL_NUMBITS ${SIZEOF_INT})
+IF (HAVE_SIZEOF_LONG_LONG AND (${SIZEOF_LONG_LONG} EQUAL 8))
+  SET (NATIVE_SIGNED "long long")
+  SET (NATIVE_UNSIGNED "unsigned long long")
+ELSEIF (HAVE_SIZEOF_LONG AND (${SIZEOF_LONG} EQUAL 8))
+  SET (NATIVE_SIGNED "long")
+  SET (NATIVE_UNSIGNED "unsigned long")
+ELSEIF (HAVE_SIZEOF_INT AND (${SIZEOF_INT} EQUAL 8))
+  SET (NATIVE_SIGNED "int")
+  SET (NATIVE_UNSIGNED "unsigned int")
+ELSEIF (HAVE_SIZEOF_SHORT AND (${SIZEOF}_SHORT EQUAL 8))
+  #
+  # Can this ever happen -;
+  #
+  SET (NATIVE_SIGNED "short")
+  SET (NATIVE_UNSIGNED "unsigned short")
 ELSE ()
-  SET (SIMUL_NUMBITS sizeof(int))
+  MESSAGE (FATAL_ERROR "Cannot find a native byte with 64bits")
 ENDIF ()
 
 # Arithmetic checks ?
 #
 SET (ARITHMETIC_CHECKS TRUE)
 #
+# Std include path ?
+#
+SET (STD_INCLUDE_PATH "(0)")
+#
 # Std assert ?
 #
-SET (STD_ASSERT 0)
+SET (STD_ASSERT "(0)")
 #
 # Std hardcoded macros ?
 #
-SET (STD_MACROS 0)
+SET (STD_MACROS "(0)")
 #
 # POSIX jmp ?
 #
@@ -122,17 +136,16 @@ ADD_DEFINITIONS("-DUCPP_CONFIG")
 ###############
 # Executables #
 ###############
-# MYPACKAGETESTEXECUTABLE(marpaESLIFTester           test/marpaESLIFTester.c)
-
-################
-# Dependencies #
-################
-# MYPACKAGEDEPENDENCY (genericLogger "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/github/genericLogger" LIBS)
+MYPACKAGEEXECUTABLE(cpp cpp.c)
+SET_SOURCE_FILES_PROPERTIES(cpp.c PROPERTIES COMPILE_DEFINITIONS "STAND_ALONE")
+MYPACKAGETESTEXECUTABLE(atest atest.c)
+MYPACKAGETESTEXECUTABLE(sample sample.c)
 
 #########
 # Tests #
 #########
-# MYPACKAGECHECK(marpaESLIFTester)
+MYPACKAGECHECK(atest)
+MYPACKAGECHECK(sample)
 
 ###########
 # Install #
