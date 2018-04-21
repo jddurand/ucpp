@@ -362,5 +362,17 @@
  */
 #cmakedefine SEMPER_FIDELIS
 
+/* Inline stuff */
+#cmakedefine C_INLINE                     @C_INLINE@
+#ifndef __cplusplus
+/* Make sure INLINE macro is always defined */
+#  ifndef C_INLINE
+#    define INLINE
+#  else
+#    define INLINE @C_INLINE@
+#  endif
+#endif
+
+
 /* End of options overridable by UCPP_CONFIG and config.h */
 #endif /* UCPP_CONFIG_H */
