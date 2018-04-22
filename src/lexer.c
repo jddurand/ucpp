@@ -27,13 +27,13 @@
  *
  */
 
-#include "tune.h"
+#include "ucpp/tune.h"
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
 #include <limits.h>
-#include "ucppi.h"
-#include "mem.h"
+#include "ucpp/ucppi.h"
+#include "ucpp/mem.h"
 #ifdef UCPP_MMAP
 #include <unistd.h>
 #include <sys/types.h>

@@ -27,13 +27,13 @@
  *
  */
 
-#include "tune.h"
+#include "ucpp/tune.h"
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
 #include <limits.h>
-#include "ucppi.h"
-#include "mem.h"
+#include "ucpp/ucppi.h"
+#include "ucpp/mem.h"
 
 JMP_BUF eval_exception;
 long eval_line;
@@ -72,7 +72,7 @@ static void z_error(int type);
 static void z_warn(int type);
 #endif
 
-#include "internal/arith.c"
+#include "ucpp/internal/arith.c"
 
 static void z_error(int type)
 {

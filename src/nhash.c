@@ -31,8 +31,8 @@
 #include <stddef.h>
 #include <string.h>
 #include <limits.h>
-#include "nhash.h"
-#include "mem.h"
+#include "ucpp/nhash.h"
+#include "ucpp/mem.h"
 
 /*
  * Hash a string into an `unsigned' value. This function is derived

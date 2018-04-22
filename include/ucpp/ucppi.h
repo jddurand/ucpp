@@ -30,9 +30,9 @@
 #ifndef UCPP__UCPPI__
 #define UCPP__UCPPI__
 
-#include "tune.h"
-#include "cpp.h"
-#include "nhash.h"
+#include "ucpp/tune.h"
+#include "ucpp/cpp.h"
+#include "ucpp/nhash.h"
 
 /*
  * A macro represented in a compact form; simple tokens are represented

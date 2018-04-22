@@ -27,14 +27,14 @@
  *
  */
 
-#include "tune.h"
+#include "ucpp/tune.h"
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
 #include <limits.h>
-#include "ucppi.h"
-#include "mem.h"
-#include "nhash.h"
+#include "ucpp/ucppi.h"
+#include "ucpp/mem.h"
+#include "ucpp/nhash.h"
 
 /*
  * we store macros in a hash table, and retrieve them using their name

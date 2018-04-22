@@ -28,7 +28,7 @@
  *
  */
 
-#include "mem.h"
+#include "ucpp/mem.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
