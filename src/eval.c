@@ -72,7 +72,7 @@ static void z_error(int type);
 static void z_warn(int type);
 #endif
 
-#include "arith.c"
+#include "internal/arith.c"
 
 static void z_error(int type)
 {

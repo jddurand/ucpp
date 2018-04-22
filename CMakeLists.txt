@@ -117,13 +117,13 @@ SET (SEMPER_FIDELIS FALSE)
 # Take care: arith.c is included, should never be compiled standalone
 #
 SET (ucpp_src
-  ${CMAKE_CURRENT_SOURCE_DIR}/mem.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/nhash.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/cpp.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/lexer.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/assert.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/macro.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/eval.c)
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/mem.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/nhash.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/lexer.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/assert.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/macro.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/eval.c)
 
 MYPACKAGELIBRARY(
   ${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
@@ -134,13 +134,15 @@ ADD_DEFINITIONS("-DUCPP_CONFIG")
 ###############
 # Executables #
 ###############
-MYPACKAGEEXECUTABLE(cpp cpp.c)
-TARGET_COMPILE_OPTIONS(cpp PUBLIC "-DSTAND_ALONE")
-MYPACKAGETESTEXECUTABLE(atest_native atest.c)
+MYPACKAGEEXECUTABLE(cpp src/cpp.c)
+FOREACH (_target cpp cpp_static)
+  TARGET_COMPILE_OPTIONS(${_target} PUBLIC "-DSTAND_ALONE")
+ENDFOREACH ()
+MYPACKAGETESTEXECUTABLE(atest_native test/atest.c)
 TARGET_COMPILE_OPTIONS(atest_native PUBLIC "-DTEST_NATIVE")
-MYPACKAGETESTEXECUTABLE(atest_simul atest.c)
+MYPACKAGETESTEXECUTABLE(atest_simul test/atest.c)
 TARGET_COMPILE_OPTIONS(atest_simul PUBLIC "-DTEST_SIMUL")
-MYPACKAGETESTEXECUTABLE(sample sample.c)
+MYPACKAGETESTEXECUTABLE(sample test/sample.c)
 
 #########
 # Tests #
