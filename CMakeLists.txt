@@ -127,7 +127,7 @@ SET (ucpp_src
 
 MYPACKAGELIBRARY(
   ${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
-  ${INCLUDE_OUTPUT_PATH}/config.h
+  ${INCLUDE_OUTPUT_PATH}/ucpp/config.h
   ${ucpp_src})
 ADD_DEFINITIONS("-DUCPP_CONFIG")
 

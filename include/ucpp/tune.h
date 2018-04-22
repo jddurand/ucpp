@@ -31,7 +31,7 @@
 #define UCPP__TUNE__
 
 #ifdef UCPP_CONFIG
-#include "config.h"
+#include <ucpp/config.h>
 #else
 
 /* ====================================================================== */

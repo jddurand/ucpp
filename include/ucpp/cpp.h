@@ -134,7 +134,7 @@ enum {
 	UMINUS		/* unary - */
 };
 
-#include "ucpp/tune.h"
+#include <ucpp/tune.h>
 #include <stdio.h>
 #include <setjmp.h>
 
