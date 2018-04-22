@@ -30,6 +30,12 @@
 #ifndef UCPP__CPP__
 #define UCPP__CPP__
 
+#include <ucpp/export.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Uncomment the following if you want ucpp to use externally provided
  * error-reporting functions (ucpp_warning(), ucpp_error() and ucpp_ouch())
@@ -238,38 +244,38 @@ struct lexer_state {
  */
 
 #ifndef NO_UCPP_BUF
-void flush_output(struct lexer_state *);
+ucpp_EXPORT void flush_output(struct lexer_state *);
 #endif
 
-void init_assertions(void);
-int make_assertion(char *);
-int destroy_assertion(char *);
-void print_assertions(void);
+ucpp_EXPORT void init_assertions(void);
+ucpp_EXPORT int make_assertion(char *);
+ucpp_EXPORT int destroy_assertion(char *);
+ucpp_EXPORT void print_assertions(void);
 
-void init_macros(void);
-int define_macro(struct lexer_state *, char *);
-int undef_macro(struct lexer_state *, char *);
-void print_defines(void);
+ucpp_EXPORT void init_macros(void);
+ucpp_EXPORT int define_macro(struct lexer_state *, char *);
+ucpp_EXPORT int undef_macro(struct lexer_state *, char *);
+ucpp_EXPORT void print_defines(void);
 
-void set_init_filename(char *, int);
-void init_cpp(void);
-void init_include_path(char *[]);
-void init_lexer_state(struct lexer_state *);
-void init_lexer_mode(struct lexer_state *);
-void free_lexer_state(struct lexer_state *);
-void wipeout(void);
-int lex(struct lexer_state *);
-int check_cpp_errors(struct lexer_state *);
-void add_incpath(char *);
-void init_tables(int);
-int enter_file(struct lexer_state *, unsigned long);
-int cpp(struct lexer_state *);
-void set_identifier_char(int c);
-void unset_identifier_char(int c);
+ucpp_EXPORT void set_init_filename(char *, int);
+ucpp_EXPORT void init_cpp(void);
+ucpp_EXPORT void init_include_path(char *[]);
+ucpp_EXPORT void init_lexer_state(struct lexer_state *);
+ucpp_EXPORT void init_lexer_mode(struct lexer_state *);
+ucpp_EXPORT void free_lexer_state(struct lexer_state *);
+ucpp_EXPORT void wipeout(void);
+ucpp_EXPORT int lex(struct lexer_state *);
+ucpp_EXPORT int check_cpp_errors(struct lexer_state *);
+ucpp_EXPORT void add_incpath(char *);
+ucpp_EXPORT void init_tables(int);
+ucpp_EXPORT int enter_file(struct lexer_state *, unsigned long);
+ucpp_EXPORT int cpp(struct lexer_state *);
+ucpp_EXPORT void set_identifier_char(int c);
+ucpp_EXPORT void unset_identifier_char(int c);
 
 #ifdef UCPP_MMAP
-FILE *fopen_mmap_file(char *);
-void set_input_file(struct lexer_state *, FILE *);
+ucpp_EXPORT FILE *fopen_mmap_file(char *);
+ucpp_EXPORT void set_input_file(struct lexer_state *, FILE *);
 #endif
 
 struct stack_context {
@@ -290,9 +296,9 @@ extern struct protect {
 	struct found_file *ff;
 } protect_detect;
 
-void ucpp_ouch(char *, ...);
-void ucpp_error(long, char *, ...);
-void ucpp_warning(long, char *, ...);
+ucpp_EXPORT void ucpp_ouch(char *, ...);
+ucpp_EXPORT void ucpp_error(long, char *, ...);
+ucpp_EXPORT void ucpp_warning(long, char *, ...);
 
 extern int *transient_characters;
 
@@ -312,6 +318,10 @@ extern int *transient_characters;
 #define STRING_TOKEN(x)    ((x) == NONE || ((x) >= COMMENT && (x) <= CHAR))
 #else
 #define STRING_TOKEN(x)    ((x) >= NUMBER && (x) <= CHAR)
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif
