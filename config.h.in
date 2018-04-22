@@ -229,11 +229,78 @@
  * sign extension (the result is left-padded with bits set to 1).
  */
 
-#cmakedefine NATIVE_SIGNED      @NATIVE_SIGNED@
-#cmakedefine NATIVE_UNSIGNED    @NATIVE_UNSIGNED@
-#define NATIVE_UNSIGNED_BITS    64
-#define NATIVE_SIGNED_MIN       (-9223372036854775807LL - 1)
-#define NATIVE_SIGNED_MAX       9223372036854775807LL
+#cmakedefine HAVE_LIMITS_H
+#ifdef HAVE_LIMITS_H
+#include <limits.h>
+#endif
+#cmakedefine CHAR_BIT_VALUE          @CHAR_BIT_VALUE@
+
+#cmakedefine SIZEOF_LONG_LONG        @SIZEOF_LONG_LONG@
+#cmakedefine SIZEOF_LONG             @SIZEOF_LONG@
+#cmakedefine SIZEOF_INT              @SIZEOF_INT@
+#cmakedefine SIZEOF_SHORT            @SIZEOF_SHORT@
+
+/* Do we have a native 64-bits type ? */
+#if (defined(SIZEOF_LONG_LONG) && ((SIZEOF_LONG_LONG * CHAR_BIT_VALUE) == 64))
+#  define NATIVE_SIGNED           long long
+#  define NATIVE_UNSIGNED         unsigned long long
+#  define NATIVE_UNSIGNED_BITS    64
+#  define NATIVE_SIGNED_MIN       (-9223372036854775807LL - 1)
+#  define NATIVE_SIGNED_MAX       9223372036854775807LL
+#elif (defined(SIZEOF_LONG) && ((SIZEOF_LONG * CHAR_BIT_VALUE) == 64))
+#  define NATIVE_SIGNED           long
+#  define NATIVE_UNSIGNED         unsigned long
+#  define NATIVE_UNSIGNED_BITS    64
+#  define NATIVE_SIGNED_MIN       (-9223372036854775807L - 1)
+#  define NATIVE_SIGNED_MAX       9223372036854775807L
+#elif (defined(SIZEOF_INT) && ((SIZEOF_INT * CHAR_BIT_VALUE) == 64))
+#  define NATIVE_SIGNED           int
+#  define NATIVE_UNSIGNED         unsigned int
+#  define NATIVE_UNSIGNED_BITS    64
+#  define NATIVE_SIGNED_MIN       (-9223372036854775807 - 1)
+#  define NATIVE_SIGNED_MAX       9223372036854775807
+#elif (defined(SIZEOF_SHORT) && ((SIZEOF_SHORT * CHAR_BIT_VALUE) == 64))
+#  define NATIVE_SIGNED           short
+#  define NATIVE_UNSIGNED         unsigned short
+#  define NATIVE_UNSIGNED_BITS    64
+#  define NATIVE_SIGNED_MIN       (-9223372036854775807 - 1)
+#  define NATIVE_SIGNED_MAX       9223372036854775807
+#elif (CHAR_BIT_VALUE == 64)
+#  define NATIVE_SIGNED           char
+#  define NATIVE_UNSIGNED         unsigned char
+#  define NATIVE_UNSIGNED_BITS    64
+#  define NATIVE_SIGNED_MIN       (-9223372036854775807 - 1)
+#  define NATIVE_SIGNED_MAX       9223372036854775807
+/* Do we have a native 32-bits type ? */
+#elif (defined(SIZEOF_LONG_LONG) && ((SIZEOF_LONG_LONG * CHAR_BIT_VALUE) == 32))
+#  undef NATIVE_SIGNED
+#  define SIMUL_ARITH_SUBTYPE     unsigned long long
+#  define SIMUL_SUBTYPE_BITS      32
+#  define SIMUL_NUMBITS           64
+#elif (defined(SIZEOF_LONG) && ((SIZEOF_LONG * CHAR_BIT_VALUE) == 32))
+#  undef NATIVE_SIGNED
+#  define SIMUL_ARITH_SUBTYPE     unsigned long
+#  define SIMUL_SUBTYPE_BITS      32
+#  define SIMUL_NUMBITS           64
+#elif (defined(SIZEOF_INT) && ((SIZEOF_INT * CHAR_BIT_VALUE) == 32))
+#  undef NATIVE_SIGNED
+#  define SIMUL_ARITH_SUBTYPE     unsigned int
+#  define SIMUL_SUBTYPE_BITS      32
+#  define SIMUL_NUMBITS           64
+#elif (defined(SIZEOF_SHORT) && ((SIZEOF_SHORT * CHAR_BIT_VALUE) == 64))
+#  undef NATIVE_SIGNED
+#  define SIMUL_ARITH_SUBTYPE     unsigned short
+#  define SIMUL_SUBTYPE_BITS      32
+#  define SIMUL_NUMBITS           64
+#elif (CHAR_BIT_VALUE == 32)
+#  undef NATIVE_SIGNED
+#  define SIMUL_ARITH_SUBTYPE     unsigned char
+#  define SIMUL_SUBTYPE_BITS      32
+#  define SIMUL_NUMBITS           64
+#else
+#  error "Cannot find a native 64-bits nor 32-bits integer"
+#endif
+
 /*
 #define SIMUL_ARITH_SUBTYPE     unsigned int
 #define SIMUL_NUMBITS           (IMAX_BITS(INT_MAX) + 1)
