@@ -161,8 +161,8 @@ ucpp_EXPORT int substitute_macro(struct lexer_state *, struct macro *,
 ucpp_EXPORT struct macro *get_macro(char *);
 ucpp_EXPORT void wipe_macros(void);
 
-ucpp_EXPORT extern struct lexer_state dsharp_lexer;
-extern char compile_time[], compile_date[];
+ucpp_EXPORT struct lexer_state dsharp_lexer;
+ucpp_EXPORT char compile_time[12], compile_date[24];
 #ifdef PRAGMA_TOKENIZE
 ucpp_EXPORT struct lexer_state tokenize_lexer;
 #endif
