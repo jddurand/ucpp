@@ -31,10 +31,9 @@
 #define UCPP__CPP__
 
 #include <ucpp/export.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <ucpp/tune.h>
+#include <stdio.h>
+#include <setjmp.h>
 
 /*
  * Uncomment the following if you want ucpp to use externally provided
@@ -133,10 +132,6 @@ enum {
 	UPLUS = CPPERR,	/* unary + */
 	UMINUS		/* unary - */
 };
-
-#include <ucpp/tune.h>
-#include <stdio.h>
-#include <setjmp.h>
 
 struct token {
 	int type;
@@ -239,9 +234,24 @@ struct lexer_state {
 #define READ_AGAIN	     0x080000UL	/* emit again the last token */
 #define TEXT_OUTPUT	     0x100000UL	/* output text */
 
+struct stack_context {
+	char *long_name, *name;
+	long line;
+};
+
+extern struct protect {
+	char *macro;
+	int state;
+	struct found_file *ff;
+} protect_detect;
+
 /*
  * Public function prototypes
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef NO_UCPP_BUF
 ucpp_EXPORT void flush_output(struct lexer_state *);
@@ -278,10 +288,6 @@ ucpp_EXPORT FILE *fopen_mmap_file(char *);
 ucpp_EXPORT void set_input_file(struct lexer_state *, FILE *);
 #endif
 
-struct stack_context {
-	char *long_name, *name;
-	long line;
-};
 struct stack_context *report_context(void);
 
 extern int no_special_macros, system_macros,
@@ -290,11 +296,6 @@ extern int c99_compliant, c99_hosted;
 extern FILE *emit_output;
 extern char *current_filename, *current_long_filename;
 extern char *operators_name[];
-extern struct protect {
-	char *macro;
-	int state;
-	struct found_file *ff;
-} protect_detect;
 
 ucpp_EXPORT void ucpp_ouch(char *, ...);
 ucpp_EXPORT void ucpp_error(long, char *, ...);

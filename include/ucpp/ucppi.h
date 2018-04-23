@@ -71,12 +71,20 @@ struct comp_token_fifo {
 #define grap_char	ucpp_grap_char
 #define space_char	ucpp_space_char
 
-void init_cppm(void);
-void put_char(struct lexer_state *, unsigned char);
-void discard_char(struct lexer_state *);
-int next_token(struct lexer_state *);
-int grap_char(struct lexer_state *);
-int space_char(int);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ucpp_EXPORT void init_cppm(void);
+ucpp_EXPORT void put_char(struct lexer_state *, unsigned char);
+ucpp_EXPORT void discard_char(struct lexer_state *);
+ucpp_EXPORT int next_token(struct lexer_state *);
+ucpp_EXPORT int grap_char(struct lexer_state *);
+ucpp_EXPORT int space_char(int);
+
+#ifdef __cplusplus
+}
+#endif
 
 /*
  * from assert.c
@@ -93,11 +101,19 @@ struct assert {
 #define get_assertion		ucpp_get_assertion
 #define wipe_assertions		ucpp_wipe_assertions
 
-int cmp_token_list(struct token_fifo *, struct token_fifo *);
-int handle_assert(struct lexer_state *);
-int handle_unassert(struct lexer_state *);
-struct assert *get_assertion(char *);
-void wipe_assertions(void);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ucpp_EXPORT int cmp_token_list(struct token_fifo *, struct token_fifo *);
+ucpp_EXPORT int handle_assert(struct lexer_state *);
+ucpp_EXPORT int handle_unassert(struct lexer_state *);
+ucpp_EXPORT struct assert *get_assertion(char *);
+ucpp_EXPORT void wipe_assertions(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 /*
  * from macro.c
@@ -130,20 +146,28 @@ struct macro {
 #define tokenize_lexer		ucpp_tokenize_lexer
 #endif
 
-void print_token(struct lexer_state *, struct token *, long);
-int handle_define(struct lexer_state *);
-int handle_undef(struct lexer_state *);
-int handle_ifdef(struct lexer_state *);
-int handle_ifndef(struct lexer_state *);
-int substitute_macro(struct lexer_state *, struct macro *,
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ucpp_EXPORT void print_token(struct lexer_state *, struct token *, long);
+ucpp_EXPORT int handle_define(struct lexer_state *);
+ucpp_EXPORT int handle_undef(struct lexer_state *);
+ucpp_EXPORT int handle_ifdef(struct lexer_state *);
+ucpp_EXPORT int handle_ifndef(struct lexer_state *);
+ucpp_EXPORT int substitute_macro(struct lexer_state *, struct macro *,
 	struct token_fifo *, int, int, long);
-struct macro *get_macro(char *);
-void wipe_macros(void);
+ucpp_EXPORT struct macro *get_macro(char *);
+ucpp_EXPORT void wipe_macros(void);
 
 extern struct lexer_state dsharp_lexer;
 extern char compile_time[], compile_date[];
 #ifdef PRAGMA_TOKENIZE
 extern struct lexer_state tokenize_lexer;
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 /*
@@ -153,9 +177,17 @@ extern struct lexer_state tokenize_lexer;
 #define eval_expr	ucpp_eval_expr
 #define eval_line	ucpp_eval_line
 
-unsigned long strtoconst(char *);
-unsigned long eval_expr(struct token_fifo *, int *, int);
-extern long eval_line;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ucpp_EXPORT unsigned long strtoconst(char *);
+ucpp_EXPORT unsigned long eval_expr(struct token_fifo *, int *, int);
+ucpp_EXPORT extern long eval_line;
+
+#ifdef __cplusplus
+}
+#endif
 
 #define eval_exception	ucpp_eval_exception
 
@@ -181,12 +213,20 @@ extern JMP_BUF eval_exception;
 #define compress_token_list	ucpp_compress_token_list
 #endif
 
-char *token_name(struct token *);
-void throw_away(struct garbage_fifo *, char *);
-void garbage_collect(struct garbage_fifo *);
-void init_buf_lexer_state(struct lexer_state *, int);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ucpp_EXPORT char *token_name(struct token *);
+ucpp_EXPORT void throw_away(struct garbage_fifo *, char *);
+ucpp_EXPORT void garbage_collect(struct garbage_fifo *);
+ucpp_EXPORT void init_buf_lexer_state(struct lexer_state *, int);
 #ifdef PRAGMA_TOKENIZE
 struct comp_token_fifo compress_token_list(struct token_fifo *);
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #define ouch		ucpp_ouch
