@@ -30,49 +30,54 @@
 #ifndef UCPP__MEM__
 #define UCPP__MEM__
 
+#include <ucpp/export.h>
 #include <stdlib.h>
 
-void die(void);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ucpp_EXPORT void die(void);
 
 #if defined AUDIT || defined MEM_CHECK || defined MEM_DEBUG
-void *getmem(size_t);
+ucpp_EXPORT void *getmem(size_t);
 #else
 #define getmem		malloc
 #endif
 
 #if defined MEM_DEBUG
-void *getmem_debug(size_t, char *, int);
+ucpp_EXPORT void *getmem_debug(size_t, char *, int);
 #undef getmem
 #define getmem(x)	getmem_debug(x, __FILE__, __LINE__)
 #endif
 
 #if defined AUDIT || defined MEM_DEBUG
-void freemem(void *);
+ucpp_EXPORT void freemem(void *);
 #else
 #define freemem		free
 #endif
 
 #if defined MEM_DEBUG
-void freemem_debug(void *, char *, int);
+ucpp_EXPORT void freemem_debug(void *, char *, int);
 #undef freemem
 #define freemem(x)	freemem_debug(x, __FILE__, __LINE__)
 #endif
 
-void *incmem(void *, size_t, size_t);
-char *sdup(char *);
+ucpp_EXPORT void *incmem(void *, size_t, size_t);
+ucpp_EXPORT char *sdup(char *);
 
 #if defined MEM_DEBUG
-void *incmem_debug(void *, size_t, size_t, char *, int);
+ucpp_EXPORT void *incmem_debug(void *, size_t, size_t, char *, int);
 #undef incmem
 #define incmem(x, y, z)	incmem_debug(x, y, z, __FILE__, __LINE__)
-void report_leaks(void);
-char *sdup_debug(char *, char *, int);
+ucpp_EXPORT void report_leaks(void);
+ucpp_EXPORT char *sdup_debug(char *, char *, int);
 #define sdup(x)		sdup_debug(x, __FILE__, __LINE__)
 #endif
 
 #ifdef AUDIT
-void *mmv(void *, void *, size_t);
-void *mmvwo(void *, void *, size_t);
+ucpp_EXPORT void *mmv(void *, void *, size_t);
+ucpp_EXPORT void *mmvwo(void *, void *, size_t);
 #else
 #define mmv	memcpy
 #define mmvwo	memmove
@@ -151,5 +156,9 @@ void *mmvwo(void *, void *, size_t);
 		} \
 		(list)[(ptr) ++] = (obj); \
 	} while (0)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
