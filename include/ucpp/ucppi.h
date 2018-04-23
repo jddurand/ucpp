@@ -161,10 +161,10 @@ ucpp_EXPORT int substitute_macro(struct lexer_state *, struct macro *,
 ucpp_EXPORT struct macro *get_macro(char *);
 ucpp_EXPORT void wipe_macros(void);
 
-extern struct lexer_state dsharp_lexer;
+ucpp_EXPORT extern struct lexer_state dsharp_lexer;
 extern char compile_time[], compile_date[];
 #ifdef PRAGMA_TOKENIZE
-extern struct lexer_state tokenize_lexer;
+ucpp_EXPORT struct lexer_state tokenize_lexer;
 #endif
 
 #ifdef __cplusplus
@@ -201,7 +201,15 @@ ucpp_EXPORT extern long eval_line;
 #define catch(x)	setjmp((x))
 #define throw(x)	longjmp((x), 1)
 #endif
-extern JMP_BUF eval_exception;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ucpp_EXPORT JMP_BUF eval_exception;
+
+#ifdef __cplusplus
+}
+#endif
 
 /*
  * from cpp.c
