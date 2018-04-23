@@ -288,14 +288,14 @@ ucpp_EXPORT FILE *fopen_mmap_file(char *);
 ucpp_EXPORT void set_input_file(struct lexer_state *, FILE *);
 #endif
 
-struct stack_context *report_context(void);
+ucpp_EXPORT struct stack_context *report_context(void);
 
-extern int no_special_macros, system_macros,
+ucpp_EXPORT int no_special_macros, system_macros,
 	emit_dependencies, emit_defines, emit_assertions;
-extern int c99_compliant, c99_hosted;
-extern FILE *emit_output;
-extern char *current_filename, *current_long_filename;
-extern char *operators_name[];
+ucpp_EXPORT int c99_compliant, c99_hosted;
+ucpp_EXPORT FILE *emit_output;
+ucpp_EXPORT char *current_filename, *current_long_filename;
+ucpp_EXPORT char *operators_name[];
 
 ucpp_EXPORT void ucpp_ouch(char *, ...);
 ucpp_EXPORT void ucpp_error(long, char *, ...);
