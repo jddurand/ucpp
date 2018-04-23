@@ -287,7 +287,7 @@
 #  define SIMUL_ARITH_SUBTYPE     unsigned int
 #  define SIMUL_SUBTYPE_BITS      32
 #  define SIMUL_NUMBITS           64
-#elif (defined(SIZEOF_SHORT) && ((SIZEOF_SHORT * CHAR_BIT_VALUE) == 64))
+#elif (defined(SIZEOF_SHORT) && ((SIZEOF_SHORT * CHAR_BIT_VALUE) == 32))
 #  undef NATIVE_SIGNED
 #  define SIMUL_ARITH_SUBTYPE     unsigned short
 #  define SIMUL_SUBTYPE_BITS      32
