@@ -30,6 +30,7 @@
 #ifndef UCPP__UCPPI__
 #define UCPP__UCPPI__
 
+#include <ucpp/export.h>
 #include <ucpp/tune.h>
 #include <ucpp/cpp.h>
 #include <ucpp/nhash.h>

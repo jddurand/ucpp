@@ -30,6 +30,8 @@
 #ifndef UCPP__NHASH__
 #define UCPP__NHASH__
 
+#include <ucpp/export.h>
+
 /*
  * Each item stored in the hash table should be a structure beginning
  * with the following header.
@@ -74,6 +76,10 @@ typedef struct {
 	hash_item_header *tree[2];
 } HTT2;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Initialize a hash table. The `deldata' parameter should point to a
  * function which will be invoked on any item removed from the table;
@@ -81,7 +87,7 @@ typedef struct {
  * that item (except the hash_item_header contents, which are handled
  * internally).
  */
-void HTT_init(HTT *htt, void (*deldata)(void *));
+ucpp_EXPORT void HTT_init(HTT *htt, void (*deldata)(void *));
 
 /*
  * Link an item into the hash table under the given name. If another
@@ -90,19 +96,19 @@ void HTT_init(HTT *htt, void (*deldata)(void *));
  * table and NULL is returned. The object pointed to by `item' is
  * linked from the table, but not the string pointed to by `name'.
  */
-void *HTT_put(HTT *htt, void *item, char *name);
+ucpp_EXPORT void *HTT_put(HTT *htt, void *item, char *name);
 
 /*
  * Retrieve an item by name from the hash table. NULL is returned if
  * the object is not found.
  */
-void *HTT_get(HTT *htt, char *name);
+ucpp_EXPORT void *HTT_get(HTT *htt, char *name);
 
 /*
  * Remove an item from the hash table. 1 is returned if the item was
  * removed, 0 if it was not found.
  */
-int HTT_del(HTT *htt, char *name);
+ucpp_EXPORT int HTT_del(HTT *htt, char *name);
 
 /*
  * For all items stored within the hash table, invoke the provided
@@ -110,23 +116,27 @@ int HTT_del(HTT *htt, char *name);
  * scan by performing a longjmp() to a context encapsulating the
  * call to that function.
  */
-void HTT_scan(HTT *htt, void (*action)(void *));
+ucpp_EXPORT void HTT_scan(HTT *htt, void (*action)(void *));
 
 /*
  * Release the whole table contents. After a call to this function,
  * the table is ready to accept new items.
  */
-void HTT_kill(HTT *htt);
+ucpp_EXPORT void HTT_kill(HTT *htt);
 
 /*
  * The following functions are identical to the HTT_*() functions, except
  * that they operate on the reduced HTT2 tables.
  */
-void HTT2_init(HTT2 *htt, void (*deldata)(void *));
-void *HTT2_put(HTT2 *htt, void *item, char *name);
-void *HTT2_get(HTT2 *htt, char *name);
-int HTT2_del(HTT2 *htt, char *name);
-void HTT2_scan(HTT2 *htt, void (*action)(void *));
-void HTT2_kill(HTT2 *htt);
+ucpp_EXPORT void HTT2_init(HTT2 *htt, void (*deldata)(void *));
+ucpp_EXPORT void *HTT2_put(HTT2 *htt, void *item, char *name);
+ucpp_EXPORT void *HTT2_get(HTT2 *htt, char *name);
+ucpp_EXPORT int HTT2_del(HTT2 *htt, char *name);
+ucpp_EXPORT void HTT2_scan(HTT2 *htt, void (*action)(void *));
+ucpp_EXPORT void HTT2_kill(HTT2 *htt);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
