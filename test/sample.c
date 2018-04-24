@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 					putchar('\n');
 				} else {
 					printf("  <%2d>  `%s'\n", t,
-						operators_name[t]);
+						operators_name(t));
 				}
 			}
 		} else if (ls.ctok->type == CONTEXT) {
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 			printf("line %ld: <%2d>  `%s'\n", ls.ctok->line,
 				ls.ctok->type,
 				STRING_TOKEN(ls.ctok->type) ? ls.ctok->name
-				: operators_name[ls.ctok->type]);
+				: operators_name(ls.ctok->type));
 		}
 	}
 

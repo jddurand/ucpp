@@ -196,7 +196,7 @@ static void free_garbage_fifo(struct garbage_fifo *gf)
  * order is important: it must match the token-constants declared as an
  * enum in the header file.
  */
-char *operators_name[] = {
+static char *operators[] = {
 	" ", "\n", " ",
 	"0000", "name", "bunch", "pragma", "context",
 	"\"dummy string\"", "'dummy char'",
@@ -211,14 +211,21 @@ char *operators_name[] = {
 	":", ".", "...", "#", "##", " ", "ouch", "<:", ":>", "<%", "%>",
 	"%:", "%:%:"
 };
+static char *operator_unknown = "";
+
+char *operators_name(int i) {
+  if (i < 0) return operator_unknown;
+  if (i >= (sizeof(operators) / sizeof(operators[0]))) return operator_unknown;
+  return operators[i];
+}
 
 /* the ascii representation of a token */
 #ifdef SEMPER_FIDELIS
 #define tname(x)	(ttWHI((x).type) ? " " : S_TOKEN((x).type) \
-			? (x).name : operators_name[(x).type])
+			? (x).name : operators_name((x).type))
 #else
 #define tname(x)	(S_TOKEN((x).type) ? (x).name \
-			: operators_name[(x).type])
+			: operators_name((x).type))
 #endif
 
 char *token_name(struct token *t)

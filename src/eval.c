@@ -650,7 +650,7 @@ trunc_err:
 	throw(eval_exception);
 rogue_op_err:
 	error(eval_line, "rogue operator '%s' in constant integral "
-		"expression", operators_name[ct->type]);
+		"expression", operators_name(ct->type));
 	throw(eval_exception);
 invalid_token_err:
 	error(eval_line, "invalid token in constant integral expression");

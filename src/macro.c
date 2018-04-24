@@ -227,7 +227,7 @@ static void print_macro(void *vm)
 		else if (S_TOKEN(tt)) {
 			fputs((char *)(m->cval.t + i), emit_output);
 			i += 1 + strlen((char *)(m->cval.t + i));
-		} else fputs(operators_name[tt], emit_output);
+		} else fputs(operators_name(tt), emit_output);
 	}
 #else
 	if (m->val.nt == 0) {
@@ -272,7 +272,7 @@ void print_token(struct lexer_state *ls, struct token *t, long uz_line)
 	if (ls->flags & KEEP_OUTPUT) {
 		for (; ls->oline < ls->line;) put_char(ls, '\n');
 	}
-	if (!S_TOKEN(t->type)) x = operators_name[t->type];
+	if (!S_TOKEN(t->type)) x = operators_name(t->type);
 	for (; *x; x ++) put_char(ls, *x);
 }
 
@@ -292,7 +292,7 @@ static void print_token_nailed(struct lexer_state *ls, struct token *t,
 	if (ls->flags & KEEP_OUTPUT) {
 		for (; ls->oline < nail_line;) put_char(ls, '\n');
 	}
-	if (!S_TOKEN(t->type)) x = operators_name[t->type];
+	if (!S_TOKEN(t->type)) x = operators_name(t->type);
 	for (; *x; x ++) put_char(ls, *x);
 }
 

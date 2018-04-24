@@ -295,7 +295,7 @@ ucpp_EXPORT int no_special_macros, system_macros,
 ucpp_EXPORT int c99_compliant, c99_hosted;
 ucpp_EXPORT FILE *emit_output;
 ucpp_EXPORT char *current_filename, *current_long_filename;
-ucpp_EXPORT char *operators_name[];
+ucpp_EXPORT char *operators_name(int i);
 
 ucpp_EXPORT void ucpp_ouch(char *, ...);
 ucpp_EXPORT void ucpp_error(long, char *, ...);
