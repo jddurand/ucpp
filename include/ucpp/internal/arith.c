@@ -30,7 +30,7 @@
  */
 
 #include <limits.h>
-#include "ucpp/arith.h"
+#include "ucpp/internal/arith.h"
 
 #define ARITH_OCTAL(x)   ((x) >= '0' && (x) <= '7')
 #define ARITH_OVAL(x)    ((x) - '0')
