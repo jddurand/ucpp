@@ -27,8 +27,8 @@
  *
  */
 
-#ifndef UCPP__MEM__
-#define UCPP__MEM__
+#ifndef UCPP_MEM_H
+#define UCPP_MEM_H
 
 #include <ucpp/export.h>
 #include <stdlib.h>
@@ -161,4 +161,4 @@ ucpp_EXPORT void *mmvwo(void *, void *, size_t);
 }
 #endif
 
-#endif
+#endif /* UCPP_MEM_H */

@@ -33,7 +33,7 @@
 #include <stddef.h>
 #include <limits.h>
 #include "ucpp/ucppi.h"
-#include "ucpp/mem.h"
+#include "ucpp/internal/mem.h"
 #include "ucpp/nhash.h"
 
 /*

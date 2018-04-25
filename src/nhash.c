@@ -32,7 +32,7 @@
 #include <string.h>
 #include <limits.h>
 #include "ucpp/nhash.h"
-#include "ucpp/mem.h"
+#include "ucpp/internal/mem.h"
 
 /*
  * Hash a string into an `unsigned' value. This function is derived

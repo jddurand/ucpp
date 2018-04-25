@@ -34,7 +34,7 @@
 #include <limits.h>
 #include <time.h>
 #include "ucpp/ucppi.h"
-#include "ucpp/mem.h"
+#include "ucpp/internal/mem.h"
 #include "ucpp/nhash.h"
 
 /*
