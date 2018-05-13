@@ -43,6 +43,7 @@
 #include <time.h>
 #include "ucpp/ucppi.h"
 #include "ucpp/internal/mem.h"
+#include "ucpp/internal/context.h"
 #include "ucpp/nhash.h"
 #ifdef UCPP_MMAP
 #include <unistd.h>
@@ -57,8 +58,6 @@
 #ifdef STAND_ALONE
 static char *include_path_std[] = { STD_INCLUDE_PATH, 0 };
 #endif
-static char **include_path;
-static size_t include_path_nb = 0;
 
 int no_special_macros = 0;
 int emit_dependencies = 0, emit_defines = 0, emit_assertions = 0;
@@ -69,9 +68,6 @@ static char *system_macros_def[] = { STD_MACROS, 0 };
 static char *system_assertions_def[] = { STD_ASSERT, 0 };
 #endif
 
-char *current_filename = 0, *current_long_filename = 0;
-static int current_incdir = -1;
-
 #ifndef NO_UCPP_ERROR_FUNCTIONS
 /*
  * "ouch" is the name for an internal ucpp error. If AUDIT is not defined,
@@ -79,12 +75,12 @@ static int current_incdir = -1;
  * emitted by getmem() (in mem.c) if MEM_CHECK is defined, but this "ouch"
  * does not use this function.
  */
-void ucpp_ouch(char *fmt, ...)
+void ucpp_ouch(ucpp_context_t *ucpp_context, char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	fprintf(stderr, "%s: ouch, ", current_filename);
+	fprintf(stderr, "%s: ouch, ", ucpp_context->current_filename);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	va_end(ap);
@@ -94,18 +90,18 @@ void ucpp_ouch(char *fmt, ...)
 /*
  * report an error, with current_filename, line, and printf-like syntax
  */
-void ucpp_error(long line, char *fmt, ...)
+void ucpp_error(ucpp_context_t *ucpp_context, long line, char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
 	if (line > 0)
-		fprintf(stderr, "%s: line %ld: ", current_filename, line);
-	else if (line == 0) fprintf(stderr, "%s: ", current_filename);
+		fprintf(stderr, "%s: line %ld: ", ucpp_context->current_filename, line);
+	else if (line == 0) fprintf(stderr, "%s: ", ucpp_context->current_filename);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	if (line >= 0) {
-		struct stack_context *sc = report_context();
+		struct stack_context *sc = report_context(ucpp_context);
 		size_t i;
 
 		for (i = 0; sc[i].line >= 0; i ++)
@@ -120,21 +116,21 @@ void ucpp_error(long line, char *fmt, ...)
 /*
  * like error(), with the mention "warning"
  */
-void ucpp_warning(long line, char *fmt, ...)
+void ucpp_warning(ucpp_context_t *ucpp_context, long line, char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
 	if (line > 0)
 		fprintf(stderr, "%s: warning: line %ld: ",
-			current_filename, line);
+			ucpp_context->current_filename, line);
 	else if (line == 0)
-		fprintf(stderr, "%s: warning: ", current_filename);
+		fprintf(stderr, "%s: warning: ", ucpp_context->current_filename);
 	else fprintf(stderr, "warning: ");
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	if (line >= 0) {
-		struct stack_context *sc = report_context();
+		struct stack_context *sc = report_context(ucpp_context);
 		size_t i;
 
 		for (i = 0; sc[i].line >= 0; i ++)
@@ -233,32 +229,6 @@ char *token_name(struct token *t)
 	return tname(*t);
 }
 
-/*
- * To speed up deeply nested and repeated inclusions, we:
- * -- use a hash table to remember where we found each file
- * -- remember when the file is protected by a #ifndef/#define/#endif
- *    construction; we can then avoid including several times a file
- *    when this is not necessary.
- * -- remember in which directory, in the include path, the file was found.
- */
-struct found_file {
-	hash_item_header head;    /* first field */
-	char *name;
-	char *protect;
-};
-
-/*
- * For files from system include path.
- */
-struct found_file_sys {
-	hash_item_header head;    /* first field */
-	struct found_file *rff;
-	int incdir;
-};
-
-static HTT found_files, found_files_sys;
-static int found_files_init_done = 0, found_files_sys_init_done = 0;
-
 static struct found_file *new_found_file(void)
 {
 	struct found_file *ff = getmem(sizeof(struct found_file));
@@ -297,34 +267,32 @@ static void del_found_file_sys(void *m)
  * To keep up with the #ifndef/#define/#endif protection mechanism
  * detection.
  */
-struct protect protect_detect;
-static struct protect *protect_detect_stack = 0;
 
-void set_init_filename(char *x, int real_file)
+void set_init_filename(ucpp_context_t *ucpp_context, char *x, int real_file)
 {
-	if (current_filename) freemem(current_filename);
-	current_filename = sdup(x);
-	current_long_filename = 0;
-	current_incdir = -1;
+	if (ucpp_context->current_filename) freemem(ucpp_context->current_filename);
+	ucpp_context->current_filename = sdup(x);
+	ucpp_context->current_long_filename = 0;
+	ucpp_context->current_incdir = -1;
 	if (real_file) {
-		protect_detect.macro = 0;
-		protect_detect.state = 1;
-		protect_detect.ff = new_found_file();
-		protect_detect.ff->name = sdup(x);
-		HTT_put(&found_files, protect_detect.ff, x);
+		ucpp_context->protect_detect.macro = 0;
+		ucpp_context->protect_detect.state = 1;
+		ucpp_context->protect_detect.ff = new_found_file();
+		ucpp_context->protect_detect.ff->name = sdup(x);
+		HTT_put(ucpp_context, &ucpp_context->found_files, ucpp_context->protect_detect.ff, x);
 	} else {
-		protect_detect.state = 0;
+		ucpp_context->protect_detect.state = 0;
 	}
 }
 
-static void init_found_files(void)
+static void init_found_files(ucpp_context_t *ucpp_context)
 {
-	if (found_files_init_done) HTT_kill(&found_files);
-	HTT_init(&found_files, del_found_file);
-	found_files_init_done = 1;
-	if (found_files_sys_init_done) HTT_kill(&found_files_sys);
-	HTT_init(&found_files_sys, del_found_file_sys);
-	found_files_sys_init_done = 1;
+	if (ucpp_context->found_files_init_done) HTT_kill(ucpp_context, &ucpp_context->found_files);
+	HTT_init(&ucpp_context->found_files, del_found_file);
+	ucpp_context->found_files_init_done = 1;
+	if (ucpp_context->found_files_sys_init_done) HTT_kill(ucpp_context, &ucpp_context->found_files_sys);
+	HTT_init(&ucpp_context->found_files_sys, del_found_file_sys);
+	ucpp_context->found_files_sys_init_done = 1;
 }
 
 /*
@@ -439,43 +407,36 @@ static void close_input(struct lexer_state *ls)
  * file_context (and the two functions push_ and pop_) are used to save
  * all that is needed when including a file.
  */
-static struct file_context {
-	struct lexer_state ls;
-	char *name, *long_name;
-	int incdir;
-} *ls_stack;
-static size_t ls_depth = 0;
-
-static void push_file_context(struct lexer_state *ls)
+static void push_file_context(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	struct file_context fc;
 
-	fc.name = current_filename;
-	fc.long_name = current_long_filename;
-	fc.incdir = current_incdir;
+	fc.name = ucpp_context->current_filename;
+	fc.long_name = ucpp_context->current_long_filename;
+	fc.incdir = ucpp_context->current_incdir;
 	mmv(&(fc.ls), ls, sizeof(struct lexer_state));
-	aol(ls_stack, ls_depth, fc, LS_STACK_MEMG);
-	ls_depth --;
-	aol(protect_detect_stack, ls_depth, protect_detect, LS_STACK_MEMG);
-	protect_detect.macro = 0;
+	aol(ucpp_context->ls_stack, ucpp_context->ls_depth, fc, LS_STACK_MEMG);
+	ucpp_context->ls_depth --;
+	aol(ucpp_context->protect_detect_stack, ucpp_context->ls_depth, ucpp_context->protect_detect, LS_STACK_MEMG);
+	ucpp_context->protect_detect.macro = 0;
 }
 
-static void pop_file_context(struct lexer_state *ls)
+static void pop_file_context(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 #ifdef AUDIT
-	if (ls_depth <= 0) ouch("prepare to meet thy creator");
+	if (ucpp_context->ls_depth <= 0) ouch(ucpp_context, "prepare to meet thy creator");
 #endif
 	close_input(ls);
-	restore_lexer_state(ls, &(ls_stack[-- ls_depth].ls));
-	if (protect_detect.macro) freemem(protect_detect.macro);
-	protect_detect = protect_detect_stack[ls_depth];
-	if (current_filename) freemem(current_filename);
-	current_filename = ls_stack[ls_depth].name;
-	current_long_filename = ls_stack[ls_depth].long_name;
-	current_incdir = ls_stack[ls_depth].incdir;
-	if (ls_depth == 0) {
-		freemem(ls_stack);
-		freemem(protect_detect_stack);
+	restore_lexer_state(ls, &(ucpp_context->ls_stack[-- ucpp_context->ls_depth].ls));
+	if (ucpp_context->protect_detect.macro) freemem(ucpp_context->protect_detect.macro);
+	ucpp_context->protect_detect = ucpp_context->protect_detect_stack[ucpp_context->ls_depth];
+	if (ucpp_context->current_filename) freemem(ucpp_context->current_filename);
+	ucpp_context->current_filename = ucpp_context->ls_stack[ucpp_context->ls_depth].name;
+	ucpp_context->current_long_filename = ucpp_context->ls_stack[ucpp_context->ls_depth].long_name;
+	ucpp_context->current_incdir = ucpp_context->ls_stack[ucpp_context->ls_depth].incdir;
+	if (ucpp_context->ls_depth == 0) {
+		freemem(ucpp_context->ls_stack);
+		freemem(ucpp_context->protect_detect_stack);
 	}
 }
 
@@ -484,18 +445,18 @@ static void pop_file_context(struct lexer_state *ls)
  * current file, ending with a dummy entry with a negative line number.
  * The caller is responsible for freeing the returned pointer.
  */
-struct stack_context *report_context(void)
+struct stack_context *report_context(ucpp_context_t *ucpp_context)
 {
 	struct stack_context *sc;
 	size_t i;
 
-	sc = getmem((ls_depth + 1) * sizeof(struct stack_context));
-	for (i = 0; i < ls_depth; i ++) {
-		sc[i].name = ls_stack[ls_depth - i - 1].name;
-		sc[i].long_name = ls_stack[ls_depth - i - 1].long_name;
-		sc[i].line = ls_stack[ls_depth - i - 1].ls.line - 1;
+	sc = getmem((ucpp_context->ls_depth + 1) * sizeof(struct stack_context));
+	for (i = 0; i < ucpp_context->ls_depth; i ++) {
+		sc[i].name = ucpp_context->ls_stack[ucpp_context->ls_depth - i - 1].name;
+		sc[i].long_name = ucpp_context->ls_stack[ucpp_context->ls_depth - i - 1].long_name;
+		sc[i].line = ucpp_context->ls_stack[ucpp_context->ls_depth - i - 1].ls.line - 1;
 	}
-	sc[ls_depth].line = -1;
+	sc[ucpp_context->ls_depth].line = -1;
 	return sc;
 }
 
@@ -547,10 +508,10 @@ void free_lexer_state(struct lexer_state *ls)
 /*
  * Print line information.
  */
-static void print_line_info(struct lexer_state *ls, unsigned long flags)
+static void print_line_info(ucpp_context_t *ucpp_context, struct lexer_state *ls, unsigned long flags)
 {
-	char *fn = current_long_filename ?
-		current_long_filename : current_filename;
+	char *fn = current_long_filename(ucpp_context) ?
+		current_long_filename(ucpp_context) : current_filename(ucpp_context);
 	char *b, *d;
 
 	b = getmem(50 + strlen(fn));
@@ -559,7 +520,7 @@ static void print_line_info(struct lexer_state *ls, unsigned long flags)
 	} else {
 		sprintf(b, "#line %ld \"%s\"\n", ls->line, fn);
 	}
-	for (d = b; *d; d ++) put_char(ls, (unsigned char)(*d));
+	for (d = b; *d; d ++) put_char(ucpp_context, ls, (unsigned char)(*d));
 	freemem(b);
 }
 
@@ -573,10 +534,10 @@ static void print_line_info(struct lexer_state *ls, unsigned long flags)
  *
  * enter_file() returns 1 if a (CONTEXT) token was produced, 0 otherwise.
  */
-int enter_file(struct lexer_state *ls, unsigned long flags)
+int enter_file(ucpp_context_t *ucpp_context, struct lexer_state *ls, unsigned long flags)
 {
-	char *fn = current_long_filename ?
-		current_long_filename : current_filename;
+	char *fn = current_long_filename(ucpp_context) ?
+		current_long_filename(ucpp_context) : current_filename(ucpp_context);
 
 	if (!(flags & LINE_NUM)) return 0;
 	if ((flags & LEXER) && !(flags & TEXT_OUTPUT)) {
@@ -585,10 +546,10 @@ int enter_file(struct lexer_state *ls, unsigned long flags)
 		t.type = CONTEXT;
 		t.line = ls->line;
 		t.name = fn;
-		print_token(ls, &t, 0);
+		print_token(ucpp_context, ls, &t, 0);
 		return 1;
 	}
-	print_line_info(ls, flags);
+	print_line_info(ucpp_context, ls, flags);
 	ls->oline --;	/* emitted #line troubled oline */
 	return 0;
 }
@@ -602,16 +563,14 @@ int enter_file(struct lexer_state *ls, unsigned long flags)
  * into single '\n', bad things could happen. We strongly hope that, if
  * we could fseek() to the end but could not mmap(), then we can get back.
  */
-static void *find_file_map;
-static size_t map_length;
 
-FILE *fopen_mmap_file(char *name)
+FILE *fopen_mmap_file(ucpp_context_t *ucpp_context, char *name)
 {
 	FILE *f;
 	int fd;
 	long l;
 
-	find_file_map = 0;
+	ucpp_context->find_file_map = 0;
 	fd = open(name, O_RDONLY, 0);
 	if (fd < 0) return 0;
 	l = lseek(fd, 0, SEEK_END);
@@ -621,11 +580,11 @@ FILE *fopen_mmap_file(char *name)
 		return 0;
 	}
 	if (l < 0) return f;	/* not seekable */
-	map_length = l;
-	if ((find_file_map = mmap(0, map_length, PROT_READ,
+	ucpp_context->map_length = l;
+	if ((find_ucpp_context->file_map = mmap(0, ucpp_context->map_length, PROT_READ,
 		MAP_PRIVATE, fd, 0)) == MAP_FAILED) {
 		/* we could not mmap() the file; get back */
-		find_file_map = 0;
+		ucpp_context->find_file_map = 0;
 		if (fseek(f, 0, SEEK_SET)) {
 			/* bwaah... can't get back. This file is cursed. */
 			fclose(f);
@@ -635,36 +594,24 @@ FILE *fopen_mmap_file(char *name)
 	return f;
 }
 
-void set_input_file(struct lexer_state *ls, FILE *f)
+void set_input_file(ucpp_context_t *ucpp_context, struct lexer_state *ls, FILE *f)
 {
 	ls->input = f;
-	if (find_file_map) {
+	if (ucpp_context->find_file_map) {
 		ls->from_mmap = 1;
 		ls->input_buf_sav = ls->input_buf;
-		ls->input_buf = find_file_map;
+		ls->input_buf = ucpp_context->find_file_map;
 		ls->pbuf = 0;
-		ls->ebuf = map_length;
+		ls->ebuf = ucpp_context->map_length;
 	} else {
 		ls->from_mmap = 0;
 	}
 }
 #endif
 
-/*
- * Find a file by looking through the include path.
- * return value: a FILE * on the file, opened in "r" mode, or 0.
- *
- * find_file_error will contain:
- *   FF_ERROR      on error (file not found or impossible to read)
- *   FF_PROTECT    file is protected and therefore useless to read
- *   FF_KNOWN      file is already known
- *   FF_UNKNOWN    file was not already known
- */
-static int find_file_error;
-
 enum { FF_ERROR, FF_PROTECT, FF_KNOWN, FF_UNKNOWN };
 
-static FILE *find_file(char *name, int localdir)
+static FILE *find_file(ucpp_context_t *ucpp_context, char *name, int localdir)
 {
 	FILE *f;
 	int i, incdir = -1;
@@ -674,13 +621,13 @@ static FILE *find_file(char *name, int localdir)
 	int lf = 0;
 	int nffa = 0;
 
-	find_file_error = FF_ERROR;
-	protect_detect.state = -1;
-	protect_detect.macro = 0;
+	ucpp_context->find_file_error = FF_ERROR;
+	ucpp_context->protect_detect.state = -1;
+	ucpp_context->protect_detect.macro = 0;
 	if (localdir) {
 		int i;
-		char *rfn = current_long_filename ? current_long_filename
-			: current_filename;
+		char *rfn = current_long_filename(ucpp_context) ? current_long_filename(ucpp_context)
+			: current_filename(ucpp_context);
 
 		for (i = strlen(rfn) - 1; i >= 0; i --)
 #ifdef MSDOS
@@ -712,11 +659,11 @@ static FILE *find_file(char *name, int localdir)
 #endif
 			mmv(s + i + 1, name, nl);
 			s[i + 1 + nl] = 0;
-			ff = HTT_get(&found_files, s);
-		} else ff = HTT_get(&found_files, name);
+			ff = HTT_get(ucpp_context, &ucpp_context->found_files, s);
+		} else ff = HTT_get(ucpp_context, &ucpp_context->found_files, name);
 	}
 	if (!ff) {
-		struct found_file_sys *ffs = HTT_get(&found_files_sys, name);
+		struct found_file_sys *ffs = HTT_get(ucpp_context, &ucpp_context->found_files_sys, name);
 
 		if (ffs) {
 			ff = ffs->rff;
@@ -733,11 +680,11 @@ static FILE *find_file(char *name, int localdir)
 	/*
 	 * This is the first time we find the file, or it was not protected.
 	 */
-	protect_detect.ff = new_found_file();
+	ucpp_context->protect_detect.ff = new_found_file();
 	nffa = 1;
 	if (localdir &&
 #ifdef UCPP_MMAP
-		(f = fopen_mmap_file(s ? s : name))
+		(f = fopen_mmap_file(ucpp_context, s ? s : name))
 #else
 		(f = fopen(s ? s : name, "r"))
 #endif
@@ -754,11 +701,11 @@ static FILE *find_file(char *name, int localdir)
 		freemem(s);
 		s = 0;
 	}
-	for (i = 0; (size_t)i < include_path_nb; i ++) {
-		size_t ni = strlen(include_path[i]);
+	for (i = 0; (size_t)i < ucpp_context->include_path_nb; i ++) {
+		size_t ni = strlen(ucpp_context->include_path[i]);
 
 		s = getmem(ni + nl + 2);
-		mmv(s, include_path[i], ni);
+		mmv(s, ucpp_context->include_path[i], ni);
 #ifdef AMIGA
 	/* contributed by Volker Barthelmann */
 		if (ni == 1 && *s == '.') {
@@ -784,7 +731,7 @@ static FILE *find_file(char *name, int localdir)
 		}
 #endif
 		incdir = i;
-		if ((ff = HTT_get(&found_files, s)) != 0) {
+		if ((ff = HTT_get(ucpp_context, &ucpp_context->found_files, s)) != 0) {
 			/*
 			 * The file is known, but not as a system include
 			 * file under the name provided.
@@ -793,18 +740,18 @@ static FILE *find_file(char *name, int localdir)
 
 			ffs->rff = ff;
 			ffs->incdir = incdir;
-			HTT_put(&found_files_sys, ffs, name);
+			HTT_put(ucpp_context, &ucpp_context->found_files_sys, ffs, name);
 			freemem(s);
 			s = 0;
 			if (nffa) {
-				del_found_file(protect_detect.ff);
-				protect_detect.ff = 0;
+				del_found_file(ucpp_context->protect_detect.ff);
+				ucpp_context->protect_detect.ff = 0;
 				nffa = 0;
 			}
 			goto found_file_cache;
 		}
 #ifdef UCPP_MMAP
-		f = fopen_mmap_file(s);
+		f = fopen_mmap_file(ucpp_context, s);
 #else
 		f = fopen(s, "r");
 #endif
@@ -815,8 +762,8 @@ static FILE *find_file(char *name, int localdir)
 zero_out:
 	if (s) freemem(s);
 	if (nffa) {
-		del_found_file(protect_detect.ff);
-		protect_detect.ff = 0;
+		del_found_file(ucpp_context->protect_detect.ff);
+		ucpp_context->protect_detect.ff = 0;
 		nffa = 0;
 	}
 	return 0;
@@ -827,23 +774,23 @@ zero_out:
 	 */
 found_file_cache:
 	if (ff->protect) {
-		if (get_macro(ff->protect)) {
+		if (get_macro(ucpp_context, ff->protect)) {
 			/* file is protected, do not include it */
-			find_file_error = FF_PROTECT;
+			ucpp_context->find_file_error = FF_PROTECT;
 			goto zero_out;
 		}
 		/* file is protected but the guardian macro is
 		   not available; disable guardian detection. */
-		protect_detect.state = 0;
+		ucpp_context->protect_detect.state = 0;
 	}
-	protect_detect.ff = ff;
+	ucpp_context->protect_detect.ff = ff;
 #ifdef UCPP_MMAP
-	f = fopen_mmap_file(HASH_ITEM_NAME(ff));
+	f = fopen_mmap_file(ucpp_context, HASH_ITEM_NAME(ff));
 #else
 	f = fopen(HASH_ITEM_NAME(ff), "r");
 #endif
 	if (!f) goto zero_out;
-	find_file_error = FF_KNOWN;
+	ucpp_context->find_file_error = FF_KNOWN;
 	goto found_file_2;
 
 	/*
@@ -851,21 +798,21 @@ found_file_cache:
 	 * yet referenced. If lf == 1, then the file was found directly,
 	 * otherwise it was found in some system include directory.
 	 * A new found_file structure has been allocated and is in
-	 * protect_detect.ff
+	 * ucpp_context->protect_detect.ff
 	 */
 found_file:
-	if (f && ((emit_dependencies == 1 && lf && current_incdir == -1)
+	if (f && ((emit_dependencies == 1 && lf && ucpp_context->current_incdir == -1)
 		|| emit_dependencies == 2)) {
 		fprintf(emit_output, " %s", s ? s : name);
 	}
-	nff = protect_detect.ff;
+	nff = ucpp_context->protect_detect.ff;
 	nff->name = sdup(name);
 #ifdef AUDIT
 	if (
 #endif
-	HTT_put(&found_files, nff, s ? s : name)
+	HTT_put(ucpp_context, &ucpp_context->found_files, nff, s ? s : name)
 #ifdef AUDIT
-	) ouch("filename collided with a wraith")
+	) ouch(ucpp_context, "filename collided with a wraith")
 #endif
 	;
 	if (!lf) {
@@ -873,20 +820,20 @@ found_file:
 
 		ffs->rff = nff;
 		ffs->incdir = incdir;
-		HTT_put(&found_files_sys, ffs, name);
+		HTT_put(ucpp_context, &ucpp_context->found_files_sys, ffs, name);
 	}
 	if (s) freemem(s);
 	s = 0;
-	find_file_error = FF_UNKNOWN;
+	ucpp_context->find_file_error = FF_UNKNOWN;
 	ff = nff;
 
 found_file_2:
 	if (s) freemem(s);
-	current_long_filename = HASH_ITEM_NAME(ff);
+	ucpp_context->current_long_filename = HASH_ITEM_NAME(ff);
 #ifdef NO_LIBC_BUF
 	setbuf(f, 0);
 #endif
-	current_incdir = incdir;
+	ucpp_context->current_incdir = incdir;
 	return f;
 }
 
@@ -896,22 +843,22 @@ found_file_2:
  * #include_next <foo> and #include_next "foo" are considered identical,
  * for all practical purposes.
  */
-static FILE *find_file_next(char *name)
+static FILE *find_file_next(ucpp_context_t *ucpp_context, char *name)
 {
 	int i;
 	size_t nl = strlen(name);
 	FILE *f;
 	struct found_file *ff;
 
-	find_file_error = FF_ERROR;
-	protect_detect.state = -1;
-	protect_detect.macro = 0;
-	for (i = current_incdir + 1; (size_t)i < include_path_nb; i ++) {
+	ucpp_context->find_file_error = FF_ERROR;
+	ucpp_context->protect_detect.state = -1;
+	ucpp_context->protect_detect.macro = 0;
+	for (i = ucpp_context->current_incdir + 1; (size_t)i < ucpp_context->include_path_nb; i ++) {
 		char *s;
-		size_t ni = strlen(include_path[i]);
+		size_t ni = strlen(ucpp_context->include_path[i]);
 
 		s = getmem(ni + nl + 2);
-		mmv(s, include_path[i], ni);
+		mmv(s, ucpp_context->include_path[i], ni);
 		s[ni] = '/';
 		mmv(s + ni + 1, name, nl + 1);
 #ifdef MSDOS
@@ -922,22 +869,22 @@ static FILE *find_file_next(char *name)
 			for (c = s; *c; c ++) if (*c == '/') *c = '\\';
 		}
 #endif
-		ff = HTT_get(&found_files, s);
+		ff = HTT_get(ucpp_context, &ucpp_context->found_files, s);
 		if (ff) {
 			/* file was found in the cache */
 			if (ff->protect) {
-				if (get_macro(ff->protect)) {
-					find_file_error = FF_PROTECT;
+				if (get_macro(ucpp_context, ff->protect)) {
+					ucpp_context->find_file_error = FF_PROTECT;
 					freemem(s);
 					return 0;
 				}
 				/* file is protected but the guardian macro is
 				   not available; disable guardian detection. */
-				protect_detect.state = 0;
+				ucpp_context->protect_detect.state = 0;
 			}
-			protect_detect.ff = ff;
+			ucpp_context->protect_detect.ff = ff;
 #ifdef UCPP_MMAP
-			f = fopen_mmap_file(HASH_ITEM_NAME(ff));
+			f = fopen_mmap_file(ucpp_context, HASH_ITEM_NAME(ff));
 #else
 			f = fopen(HASH_ITEM_NAME(ff), "r");
 #endif
@@ -946,12 +893,12 @@ static FILE *find_file_next(char *name)
 				freemem(s);
 				return 0;
 			}
-			find_file_error = FF_KNOWN;
+			ucpp_context->find_file_error = FF_KNOWN;
 			freemem(s);
 			s = HASH_ITEM_NAME(ff);
 		} else {
 #ifdef UCPP_MMAP
-			f = fopen_mmap_file(s);
+			f = fopen_mmap_file(ucpp_context, s);
 #else
 			f = fopen(s, "r");
 #endif
@@ -959,24 +906,24 @@ static FILE *find_file_next(char *name)
 				if (emit_dependencies == 2) {
 					fprintf(emit_output, " %s", s);
 				}
-				ff = protect_detect.ff = new_found_file();
+				ff = ucpp_context->protect_detect.ff = new_found_file();
 				ff->name = sdup(s);
 #ifdef AUDIT
 				if (
 #endif
-				HTT_put(&found_files, ff, s)
+				HTT_put(ucpp_context, &ucpp_context->found_files, ff, s)
 #ifdef AUDIT
-				) ouch("filename collided with a wraith")
+				) ouch(ucpp_context, "filename collided with a wraith")
 #endif
 				;
-				find_file_error = FF_UNKNOWN;
+				ucpp_context->find_file_error = FF_UNKNOWN;
 				freemem(s);
 				s = HASH_ITEM_NAME(ff);
 			}
 		}
 		if (f) {
-			current_long_filename = s;
-			current_incdir = i;
+			ucpp_context->current_long_filename = s;
+			ucpp_context->current_incdir = i;
 			return f;
 		}
 		freemem(s);
@@ -989,7 +936,7 @@ static FILE *find_file_next(char *name)
  * expansion (and handles the "defined" operator), and call eval_expr.
  * return value: 1 if the expression is true, 0 if it is false, -1 on error.
  */
-static int handle_if(struct lexer_state *ls)
+static int handle_if(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	struct token_fifo tf, tf1, tf2, tf3, *save_tf;
 	long l = ls->line;
@@ -998,7 +945,7 @@ static int handle_if(struct lexer_state *ls)
 
 	/* first, get the whole line */
 	tf.art = tf.nt = 0;
-	while (!next_token(ls) && ls->ctok->type != NEWLINE) {
+	while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE) {
 		struct token t;
 
 		if (ltww && ttMWS(ls->ctok->type)) continue;
@@ -1013,7 +960,7 @@ static int handle_if(struct lexer_state *ls)
 	}
 	if (ltww && tf.nt) if ((-- tf.nt) == 0) freemem(tf.t);
 	if (tf.nt == 0) {
-		error(l, "void condition for a #if/#elif");
+		error(ucpp_context, l, "void condition for a #if/#elif");
 		return -1;
 	}
 	/* handle the "defined" operator */
@@ -1050,7 +997,7 @@ static int handle_if(struct lexer_state *ls)
 		continue;
 
 	check_macro:
-		m = get_macro(tf.t[nidx].name);
+		m = get_macro(ucpp_context, tf.t[nidx].name);
 		rt.type = NUMBER;
 		rt.name = m ? "1L" : "0L";
 		aol(tf1.t, tf1.nt, rt, TOKEN_LIST_MEMG);
@@ -1058,7 +1005,7 @@ static int handle_if(struct lexer_state *ls)
 	}
 	freemem(tf.t);
 	if (tf1.nt == 0) {
-		error(l, "void condition (after expansion) for a #if/#elif");
+		error(ucpp_context, l, "void condition (after expansion) for a #if/#elif");
 		return -1;
 	}
 
@@ -1071,10 +1018,10 @@ static int handle_if(struct lexer_state *ls)
 
 		ct = tf1.t + (tf1.art ++);
 		if (ct->type == NAME) {
-			struct macro *m = get_macro(ct->name);
+			struct macro *m = get_macro(ucpp_context, ct->name);
 
 			if (m) {
-				if (substitute_macro(ls, m, &tf1, 0,
+				if (substitute_macro(ucpp_context, ls, m, &tf1, 0,
 #ifdef NO_PRAGMA_IN_DIRECTIVE
 					1,
 #else
@@ -1122,7 +1069,7 @@ static int handle_if(struct lexer_state *ls)
 			if (atl.nt == 0) goto assert_error;
 
 			/* the assertion is in aname and atl; check it */
-			a = get_assertion(aname);
+			a = get_assertion(ucpp_context, aname);
 			if (a) for (i = 0; i < a->nbval; i ++)
 				if (!cmp_token_list(&atl, a->val + i)) {
 					av = 1;
@@ -1137,12 +1084,12 @@ static int handle_if(struct lexer_state *ls)
 		assert_generic:
 			tf1.art = i;
 			rt.type = NUMBER;
-			rt.name = get_assertion(aname) ? "1" : "0";
+			rt.name = get_assertion(ucpp_context, aname) ? "1" : "0";
 			aol(tf2.t, tf2.nt, rt, TOKEN_LIST_MEMG);
 			continue;
 
 		assert_error:
-			error(l, "syntax error for assertion in #if");
+			error(ucpp_context, l, "syntax error for assertion in #if");
 			ls->output_fifo = save_tf;
 			goto error1;
 		}
@@ -1151,7 +1098,7 @@ static int handle_if(struct lexer_state *ls)
 	ls->output_fifo = save_tf;
 	freemem(tf1.t);
 	if (tf2.nt == 0) {
-		error(l, "void condition (after expansion) for a #if/#elif");
+		error(ucpp_context, l, "void condition (after expansion) for a #if/#elif");
 		return -1;
 	}
 
@@ -1179,11 +1126,11 @@ static int handle_if(struct lexer_state *ls)
 	freemem(tf2.t);
 
 	if (tf3.nt == 0) {
-		error(l, "void condition (after expansion) for a #if/#elif");
+		error(ucpp_context, l, "void condition (after expansion) for a #if/#elif");
 		return -1;
 	}
-	eval_line = l;
-	z = eval_expr(&tf3, &ret, (ls->flags & WARN_STANDARD) != 0);
+	ucpp_context->eval_line = l;
+	z = eval_expr(ucpp_context, &tf3, &ret, (ls->flags & WARN_STANDARD) != 0);
 	freemem(tf3.t);
 	if (ret) return -1;
 	return (z != 0);
@@ -1201,7 +1148,7 @@ error1:
  * If nex is set to non-zero, the directive is considered as a #include_next
  * (extension to C99, mimicked from GNU)
  */
-static int handle_include(struct lexer_state *ls, unsigned long flags, int nex)
+static int handle_include(ucpp_context_t *ucpp_context, struct lexer_state *ls, unsigned long flags, int nex)
 {
 	int c, string_fname = 0;
 	char *fname;
@@ -1220,14 +1167,14 @@ static int handle_include(struct lexer_state *ls, unsigned long flags, int nex)
 #define right_angle(t)	((t) == GT || (t) == RSH || (t) == ARROW \
 			|| (t) == DIG_RBRK || (t) == DIG_RBRA)
 
-	while ((c = grap_char(ls)) >= 0 && c != '\n') {
+	while ((c = grap_char(ucpp_context, ls)) >= 0 && c != '\n') {
 		if (space_char(c)) {
 			discard_char(ls);
 			continue;
 		}
 		if (c == '<') {
 			discard_char(ls);
-			while ((c = grap_char(ls)) >= 0) {
+			while ((c = grap_char(ucpp_context, ls)) >= 0) {
 				discard_char(ls);
 				if (c == '\n') goto include_last_chance;
 				if (c == '>') break;
@@ -1238,7 +1185,7 @@ static int handle_include(struct lexer_state *ls, unsigned long flags, int nex)
 			goto do_include;
 		} else if (c == '"') {
 			discard_char(ls);
-			while ((c = grap_char(ls)) >= 0) {
+			while ((c = grap_char(ucpp_context, ls)) >= 0) {
 				discard_char(ls);
 				if (c == '\n') {
 				/* macro replacements won't save that one */
@@ -1277,7 +1224,7 @@ include_last_chance:
 	alt_ls.pbuf = 0;
 	alt_ls.ebuf = fname_ptr + 1;
 	tf.art = tf.nt = 0;
-	while (!next_token(&alt_ls)) {
+	while (!next_token(ucpp_context, &alt_ls)) {
 		if (!ttMWS(alt_ls.ctok->type)) {
 			struct token t;
 
@@ -1296,12 +1243,12 @@ include_last_chance:
 	goto include_macro2;
 	
 include_error:
-	error(l, "invalid '#include'");
+	error(ucpp_context, l, "invalid '#include'");
 	return 1;
 
 include_macro:
 	tf.art = tf.nt = 0;
-	while (!next_token(ls) && ls->ctok->type != NEWLINE) {
+	while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE) {
 		if (!ttMWS(ls->ctok->type)) {
 			struct token t;
 
@@ -1323,9 +1270,9 @@ include_macro2:
 
 		ct = tf.t + (tf.art ++);
 		if (ct->type == NAME) {
-			struct macro *m = get_macro(ct->name);
+			struct macro *m = get_macro(ucpp_context, ct->name);
 			if (m) {
-				if (substitute_macro(ls, m, &tf, 0,
+				if (substitute_macro(ucpp_context, ls, m, &tf, 0,
 #ifdef NO_PRAGMA_IN_DIRECTIVE
 					1,
 #else
@@ -1349,7 +1296,7 @@ include_macro2:
 		if (y != x) goto include_macro_err;
 		if (tf2.t[x].name[0] == 'L') {
 			if (ls->flags & WARN_STANDARD)
-				warning(l, "wide string for #include");
+				warning(ucpp_context, l, "wide string for #include");
 			fname = sdup(tf2.t[x].name);
 			nl = strlen(fname);
 			*(fname + nl - 1) = 0;
@@ -1364,7 +1311,7 @@ include_macro2:
 	} else if (left_angle(tf2.t[x].type) && right_angle(tf2.t[y].type)) {
 		int i, j;
 
-		if (ls->flags & WARN_ANNOYING) warning(l, "reconstruction "
+		if (ls->flags & WARN_ANNOYING) warning(ucpp_context, l, "reconstruction "
 			"of <foo> in #include");
 		for (j = 0, i = x; i <= y; i ++) if (!ttWHI(tf2.t[i].type))
 			j += strlen(tname(tf2.t[i]));
@@ -1382,17 +1329,17 @@ include_macro2:
 	goto do_include_next;
 
 include_macro_err:
-	error(l, "macro expansion did not produce a valid filename "
+	error(ucpp_context, l, "macro expansion did not produce a valid filename "
 		"for #include");
 	if (tf2.nt) freemem(tf2.t);
 	return 1;
 
 do_include:
 	tgd = 1;
-	while (!next_token(ls)) {
+	while (!next_token(ucpp_context, ls)) {
 		if (tgd && !ttWHI(ls->ctok->type)
 			&& (ls->flags & WARN_STANDARD)) {
-			warning(l, "trailing garbage in #include");
+			warning(ucpp_context, l, "trailing garbage in #include");
 			tgd = 0;
 		}
 		if (ls->ctok->type == NEWLINE) break;
@@ -1404,8 +1351,8 @@ do_include:
 	if (ls->ctok->type != NEWLINE) ls->line ++;
 do_include_next:
 	if (!(ls->flags & LEXER) && (ls->flags & KEEP_OUTPUT))
-		put_char(ls, '\n');
-	push_file_context(ls);
+		put_char(ucpp_context, ls, '\n');
+	push_file_context(ucpp_context, ls);
 	reinit_lexer_state(ls, 1);
 #ifdef MSDOS
 	/* on msdos systems, replace all / by \ */
@@ -1415,12 +1362,12 @@ do_include_next:
 		for (d = fname; *d; d ++) if (*d == '/') *d = '\\';
 	}
 #endif
-	f = nex ? find_file_next(fname) : find_file(fname, string_fname);
+	f = nex ? find_file_next(ucpp_context, fname) : find_file(ucpp_context, fname, string_fname);
 	if (!f) {
-		current_filename = 0;
-		pop_file_context(ls);
-		if (find_file_error == FF_ERROR) {
-			error(l, "file '%s' not found", fname);
+		ucpp_context->current_filename = 0;
+		pop_file_context(ucpp_context, ls);
+		if (ucpp_context->find_file_error == FF_ERROR) {
+			error(ucpp_context, l, "file '%s' not found", fname);
 			freemem(fname);
 			return 1;
 		}
@@ -1429,12 +1376,12 @@ do_include_next:
 		return 0;
 	}
 #ifdef UCPP_MMAP
-	set_input_file(ls, f);
+	set_input_file(ucpp_context, ls, f);
 #else
 	ls->input = f;
 #endif
-	current_filename = fname;
-	enter_file(ls, flags);
+	ucpp_context->current_filename = fname;
+	enter_file(ucpp_context, ls, flags);
 	return 0;
 
 #undef left_angle
@@ -1444,7 +1391,7 @@ do_include_next:
 /*
  * for #line directives
  */
-static int handle_line(struct lexer_state *ls, unsigned long flags)
+static int handle_line(ucpp_context_t *ucpp_context, struct lexer_state *ls, unsigned long flags)
 {
 	char *fname;
 	long l = ls->line;
@@ -1453,7 +1400,7 @@ static int handle_line(struct lexer_state *ls, unsigned long flags)
 	unsigned long z;
 
 	tf.art = tf.nt = 0;
-	while (!next_token(ls) && ls->ctok->type != NEWLINE) {
+	while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE) {
 		if (!ttMWS(ls->ctok->type)) {
 			struct token t;
 
@@ -1474,9 +1421,9 @@ static int handle_line(struct lexer_state *ls, unsigned long flags)
 
 		ct = tf.t + (tf.art ++);
 		if (ct->type == NAME) {
-			struct macro *m = get_macro(ct->name);
+			struct macro *m = get_macro(ucpp_context, ct->name);
 			if (m) {
-				if (substitute_macro(ls, m, &tf, 0,
+				if (substitute_macro(ucpp_context, ls, m, &tf, 0,
 #ifdef NO_PRAGMA_IN_DIRECTIVE
 					1,
 #else
@@ -1497,18 +1444,18 @@ static int handle_line(struct lexer_state *ls, unsigned long flags)
 	ls->output_fifo = save_tf;
 	if (tf2.art == tf2.nt || (tf2.t[tf2.art].type != NUMBER
 		&& tf2.t[tf2.art].type != CHAR)) {
-		error(l, "not a valid number for #line");
+		error(ucpp_context, l, "not a valid number for #line");
 		goto line_macro_err;
 	}
 	for (j = 0; tf2.t[tf2.art].name[j]; j ++)
 		if (tf2.t[tf2.art].name[j] < '0'
 			|| tf2.t[tf2.art].name[j] > '9')
 			if (ls->flags & WARN_STANDARD)
-				warning(l, "non-standard line number in #line");
+				warning(ucpp_context, l, "non-standard line number in #line");
 	if (catch(eval_exception)) goto line_macro_err;
-	z = strtoconst(tf2.t[tf2.art].name);
+	z = strtoconst(ucpp_context, tf2.t[tf2.art].name);
 	if (j > 10 || z > 2147483647U) {
-		error(l, "out-of-bound line number for #line");
+		error(ucpp_context, l, "out-of-bound line number for #line");
 		goto line_macro_err;
 	}
 	ls->oline = ls->line = z;
@@ -1518,12 +1465,12 @@ static int handle_line(struct lexer_state *ls, unsigned long flags)
 		for (i = tf2.art; i < tf2.nt && ttMWS(tf2.t[i].type); i ++);
 		if (i < tf2.nt) {
 			if (tf2.t[i].type != STRING) {
-				error(l, "not a valid filename for #line");
+				error(ucpp_context, l, "not a valid filename for #line");
 				goto line_macro_err;
 			}
 			if (tf2.t[i].name[0] == 'L') {
 				if (ls->flags & WARN_STANDARD) {
-					warning(l, "wide string for #line");
+					warning(ucpp_context, l, "wide string for #line");
 				}
 				fname = sdup(tf2.t[i].name);
 				nl = strlen(fname);
@@ -1535,16 +1482,16 @@ static int handle_line(struct lexer_state *ls, unsigned long flags)
 				*(fname + nl - 1) = 0;
 				mmvwo(fname, fname + 1, nl - 1);
 			}
-			if (current_filename) freemem(current_filename);
-			current_filename = fname;
+			if (ucpp_context->current_filename) freemem(ucpp_context->current_filename);
+			ucpp_context->current_filename = fname;
 		}
 		for (i ++; i < tf2.nt && ttMWS(tf2.t[i].type); i ++);
 		if (i < tf2.nt && (ls->flags & WARN_STANDARD)) {
-			warning(l, "trailing garbage in #line");
+			warning(ucpp_context, l, "trailing garbage in #line");
 		}
 	}
 	freemem(tf2.t);
-	enter_file(ls, flags);
+	enter_file(ucpp_context, ls, flags);
 	return 0;
 
 line_macro_err:
@@ -1556,19 +1503,19 @@ line_macro_err:
  * a #error directive: we emit the message without any modification
  * (except the usual backslash+newline and trigraphs)
  */
-static void handle_error(struct lexer_state *ls)
+static void handle_error(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	int c;
 	size_t p = 0, lp = 128;
 	long l = ls->line;
 	unsigned char *buf = getmem(lp);
 
-	while ((c = grap_char(ls)) >= 0 && c != '\n') {
+	while ((c = grap_char(ucpp_context, ls)) >= 0 && c != '\n') {
 		discard_char(ls);
 		wan(buf, p, (unsigned char)c, lp);
 	}
 	wan(buf, p, 0, lp);
-	error(l, "#error%s", buf);
+	error(ucpp_context, l, "#error%s", buf);
 	freemem(buf);
 }
 
@@ -1631,7 +1578,7 @@ struct comp_token_fifo compress_token_list(struct token_fifo *tf)
  *
  * We strongly hope that we are called only in LEXER mode.
  */
-static void handle_pragma(struct lexer_state *ls)
+static void handle_pragma(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	unsigned char *buf;
 	struct token t;
@@ -1641,7 +1588,7 @@ static void handle_pragma(struct lexer_state *ls)
 	struct token_fifo tf;
 
 	tf.art = tf.nt = 0;
-	while (!next_token(ls) && ls->ctok->type != NEWLINE)
+	while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE)
 		if (!ttMWS(ls->ctok->type)) break;
 	if (ls->ctok->type != NEWLINE) {
 		do {
@@ -1651,7 +1598,7 @@ static void handle_pragma(struct lexer_state *ls)
 			if (ttMWS(t.type)) continue;
 			if (S_TOKEN(t.type)) t.name = sdup(ls->ctok->name);
 			aol(tf.t, tf.nt, t, TOKEN_LIST_MEMG);
-		} while (!next_token(ls) && ls->ctok->type != NEWLINE);
+		} while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE);
 	}
 	if (tf.nt == 0) {
 		/* void pragma are silently ignored */
@@ -1661,7 +1608,7 @@ static void handle_pragma(struct lexer_state *ls)
 #else
 	int c, x = 1, y = 32;
 
-	while ((c = grap_char(ls)) >= 0 && c != '\n') {
+	while ((c = grap_char(ucpp_context, ls)) >= 0 && c != '\n') {
 		discard_char(ls);
 		if (!space_char(c)) break;
 	}
@@ -1669,7 +1616,7 @@ static void handle_pragma(struct lexer_state *ls)
 	if (c == '\n') return;
 	buf = getmem(y);
 	buf[0] = c;
-	while ((c = grap_char(ls)) >= 0 && c != '\n') {
+	while ((c = grap_char(ucpp_context, ls)) >= 0 && c != '\n') {
 		discard_char(ls);
 		wan(buf, x, c, y);
 	}
@@ -1688,7 +1635,7 @@ static void handle_pragma(struct lexer_state *ls)
  * We saw a # at the beginning of a line (or preceeded only by whitespace).
  * We check the directive name and act accordingly.
  */
-static int handle_cpp(struct lexer_state *ls, int sharp_type)
+static int handle_cpp(ucpp_context_t *ucpp_context, struct lexer_state *ls, int sharp_type)
 {
 #define condfset(x)	do { \
 		ls->condf[(x) / 32] |= 1UL << ((x) % 32); \
@@ -1704,13 +1651,13 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 
 	save_flags = ls->flags;
 	ls->flags |= LEXER;
-	while (!next_token(ls)) {
+	while (!next_token(ucpp_context, ls)) {
 		int t = ls->ctok->type;
 
 		switch (t) {
 		case COMMENT:
 			if (ls->flags & WARN_ANNOYING) {
-				warning(l, "comment in the middle of "
+				warning(ucpp_context, l, "comment in the middle of "
 					"a cpp directive");
 			}
 			/* fall through */
@@ -1722,9 +1669,9 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 				/* truly an annoying warning; null directives
 				   are rare but may increase readability of
 				   some source files, and they are legal */
-				warning(l, "null cpp directive");
+				warning(ucpp_context, l, "null cpp directive");
 			}
-			if (!(ls->flags & LEXER)) put_char(ls, '\n');
+			if (!(ls->flags & LEXER)) put_char(ucpp_context, ls, '\n');
 			goto handle_exit2;
 		case NAME:
 			break;
@@ -1739,11 +1686,11 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
                                 else
                                 /* LPS 20050602 */
 				if (ls->condcomp) {
-					error(l, "rogue '#'");
+					error(ucpp_context, l, "rogue '#'");
 					ret = 1;
 				} else {
 					if (ls->flags & WARN_STANDARD) {
-						warning(l, "rogue '#' in code "
+						warning(ucpp_context, l, "rogue '#' in code "
 							"compiled out");
 						ret = 0;
 					}
@@ -1756,25 +1703,25 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 				u.type = sharp_type;
 				u.line = l;
 				ls->flags = save_flags;
-				print_token(ls, &u, 0);
-				print_token(ls, ls->ctok, 0);
+				print_token(ucpp_context, ls, &u, 0);
+				print_token(ucpp_context, ls, ls->ctok, 0);
 				if (ls->flags & WARN_ANNOYING) {
-					warning(l, "rogue '#' dumped");
+					warning(ucpp_context, l, "rogue '#' dumped");
 				}
 				goto handle_exit3;
 			}
 		}
 		if (ls->condcomp) {
 			if (!strcmp(ls->ctok->name, "define")) {
-				ret = handle_define(ls);
+				ret = handle_define(ucpp_context, ls);
 				goto handle_exit;
 			} else if (!strcmp(ls->ctok->name, "undef")) {
-				ret = handle_undef(ls);
+				ret = handle_undef(ucpp_context, ls);
 				goto handle_exit;
 			} else if (!strcmp(ls->ctok->name, "if")) {
 				if ((++ ls->ifnest) > 63) goto too_many_if;
 				condfclr(ls->ifnest - 1);
-				ret = handle_if(ls);
+				ret = handle_if(ucpp_context, ls);
 				if (ret > 0) ret = 0;
 				else if (ret == 0) {
 					ls->condcomp = 0;
@@ -1786,7 +1733,7 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 			} else if (!strcmp(ls->ctok->name, "ifdef")) {
 				if ((++ ls->ifnest) > 63) goto too_many_if;
 				condfclr(ls->ifnest - 1);
-				ret = handle_ifdef(ls);
+				ret = handle_ifdef(ucpp_context, ls);
 				if (ret > 0) ret = 0;
 				else if (ret == 0) {
 					ls->condcomp = 0;
@@ -1798,7 +1745,7 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 			} else if (!strcmp(ls->ctok->name, "ifndef")) {
 				if ((++ ls->ifnest) > 63) goto too_many_if;
 				condfclr(ls->ifnest - 1);
-				ret = handle_ifndef(ls);
+				ret = handle_ifndef(ucpp_context, ls);
 				if (ret > 0) ret = 0;
 				else if (ret == 0) {
 					ls->condcomp = 0;
@@ -1810,12 +1757,12 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 			} else if (!strcmp(ls->ctok->name, "else")) {
 				if (ls->ifnest == 0
 					|| condfval(ls->ifnest - 1)) {
-					error(l, "rogue #else");
+					error(ucpp_context, l, "rogue #else");
 					ret = 1;
 					goto handle_warp;
 				}
 				condfset(ls->ifnest - 1);
-				if (ls->ifnest == 1) protect_detect.state = 0;
+				if (ls->ifnest == 1) ucpp_context->protect_detect.state = 0;
 				ls->condcomp = 0;
 				ls->condmet = 1;
 				ls->condnest = ls->ifnest - 1;
@@ -1823,31 +1770,31 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 			} else if (!strcmp(ls->ctok->name, "elif")) {
 				if (ls->ifnest == 0
 					|| condfval(ls->ifnest - 1)) {
-					error(l, "rogue #elif");
+					error(ucpp_context, l, "rogue #elif");
 					ret = 1;
 					goto handle_warp_ign;
 				}
-				if (ls->ifnest == 1) protect_detect.state = 0;
+				if (ls->ifnest == 1) ucpp_context->protect_detect.state = 0;
 				ls->condcomp = 0;
 				ls->condmet = 1;
 				ls->condnest = ls->ifnest - 1;
 				goto handle_warp_ign;
 			} else if (!strcmp(ls->ctok->name, "endif")) {
 				if (ls->ifnest == 0) {
-					error(l, "unmatched #endif");
+					error(ucpp_context, l, "unmatched #endif");
 					ret = 1;
 					goto handle_warp;
 				}
 				if ((-- ls->ifnest) == 0
-					&& protect_detect.state == 2) {
-					protect_detect.state = 3;
+					&& ucpp_context->protect_detect.state == 2) {
+					ucpp_context->protect_detect.state = 3;
 				}
 				goto handle_warp;
 			} else if (!strcmp(ls->ctok->name, "include")) {
-				ret = handle_include(ls, save_flags, 0);
+				ret = handle_include(ucpp_context, ls, save_flags, 0);
 				goto handle_exit3;
 			} else if (!strcmp(ls->ctok->name, "include_next")) {
-				ret = handle_include(ls, save_flags, 1);
+				ret = handle_include(ucpp_context, ls, save_flags, 1);
 				goto handle_exit3;
 			} else if (!strcmp(ls->ctok->name, "pragma")) {
 				if (!(save_flags & LEXER)) {
@@ -1858,16 +1805,16 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 					u.type = sharp_type;
 					u.line = l;
 					ls->flags = save_flags;
-					print_token(ls, &u, 0);
-					print_token(ls, ls->ctok, 0);
+					print_token(ucpp_context, ls, &u, 0);
+					print_token(ucpp_context, ls, ls->ctok, 0);
 					while (ls->flags |= LEXER,
-						!next_token(ls)) {
+						!next_token(ucpp_context, ls)) {
 						long save_line;
 
 						ls->flags &= ~LEXER;
 						save_line = ls->line;
 						ls->line = l;
-						print_token(ls, ls->ctok, 0);
+						print_token(ucpp_context, ls, ls->ctok, 0);
 						ls->line = save_line;
 						if (ls->ctok->type == NEWLINE)
 							break;
@@ -1875,55 +1822,55 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 					goto handle_exit3;
 #else
 					if (ls->flags & WARN_PRAGMA)
-						warning(l, "#pragma ignored "
+						warning(ucpp_context, l, "#pragma ignored "
 							"and not dumped");
 					goto handle_warp_ign;
 #endif
 				}
 				if (!(ls->flags & HANDLE_PRAGMA))
 					goto handle_warp_ign;
-				handle_pragma(ls);
+				handle_pragma(ucpp_context, ls);
 				goto handle_exit;
 			} else if (!strcmp(ls->ctok->name, "error")) {
 				ret = 1;
-				handle_error(ls);
+				handle_error(ucpp_context, ls);
 				goto handle_exit;
 			} else if (!strcmp(ls->ctok->name, "line")) {
-				ret = handle_line(ls, save_flags);
+				ret = handle_line(ucpp_context, ls, save_flags);
 				goto handle_exit;
 			} else if ((ls->flags & HANDLE_ASSERTIONS)
 				&& !strcmp(ls->ctok->name, "assert")) {
-				ret = handle_assert(ls);
+				ret = handle_assert(ucpp_context, ls);
 				goto handle_exit;
 			} else if ((ls->flags & HANDLE_ASSERTIONS)
 				&& !strcmp(ls->ctok->name, "unassert")) {
-				ret = handle_unassert(ls);
+				ret = handle_unassert(ucpp_context, ls);
 				goto handle_exit;
 			}
 		} else {
 			if (!strcmp(ls->ctok->name, "else")) {
 				if (condfval(ls->ifnest - 1)
 					&& (ls->flags & WARN_STANDARD)) {
-					warning(l, "rogue #else in code "
+					warning(ucpp_context, l, "rogue #else in code "
 						"compiled out");
 				}
 				if (ls->condnest == ls->ifnest - 1) {
 					if (!ls->condmet) ls->condcomp = 1;
 				}
 				condfset(ls->ifnest - 1);
-				if (ls->ifnest == 1) protect_detect.state = 0;
+				if (ls->ifnest == 1) ucpp_context->protect_detect.state = 0;
 				goto handle_warp;
 			} else if (!strcmp(ls->ctok->name, "elif")) {
 				if (condfval(ls->ifnest - 1)
 					&& (ls->flags & WARN_STANDARD)) {
-					warning(l, "rogue #elif in code "
+					warning(ucpp_context, l, "rogue #elif in code "
 						"compiled out");
 				}
 				if (ls->condnest != ls->ifnest - 1
 					|| ls->condmet)
 					goto handle_warp_ign;
-				if (ls->ifnest == 1) protect_detect.state = 0;
-				ret = handle_if(ls);
+				if (ls->ifnest == 1) ucpp_context->protect_detect.state = 0;
+				ret = handle_if(ucpp_context, ls);
 				if (ret > 0) {
 					ls->condcomp = 1;
 					ls->condmet = 1;
@@ -1933,8 +1880,8 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 			} else if (!strcmp(ls->ctok->name, "endif")) {
 				if ((-- ls->ifnest) == ls->condnest) {
 					if (ls->ifnest == 0 &&
-						protect_detect.state == 2)
-						protect_detect.state = 3;
+						ucpp_context->protect_detect.state == 2)
+						ucpp_context->protect_detect.state = 3;
 					ls->condcomp = 1;
 				}
 				goto handle_warp;
@@ -1951,7 +1898,7 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 		 * an annoying warning, depending on a command-line switch.
 		 */
 		if (ls->flags & FAIL_SHARP) {
-			error(l, "unknown cpp directive '#%s'",
+			error(ucpp_context, l, "unknown cpp directive '#%s'",
 				ls->ctok->name);
 			goto handle_warp_ign;
 		} else {
@@ -1960,40 +1907,40 @@ static int handle_cpp(struct lexer_state *ls, int sharp_type)
 			u.type = sharp_type;
 			u.line = l;
 			ls->flags = save_flags;
-			print_token(ls, &u, 0);
-			print_token(ls, ls->ctok, 0);
+			print_token(ucpp_context, ls, &u, 0);
+			print_token(ucpp_context, ls, ls->ctok, 0);
 			if (ls->flags & WARN_ANNOYING) {
-				warning(l, "rogue '#' dumped");
+				warning(ucpp_context, l, "rogue '#' dumped");
 			}
 		}
 	}
 	return 1;
 
 handle_warp_ign:
-	while (!next_token(ls)) if (ls->ctok->type == NEWLINE) break;
+	while (!next_token(ucpp_context, ls)) if (ls->ctok->type == NEWLINE) break;
 	goto handle_exit;
 handle_warp:
-	while (!next_token(ls)) {
+	while (!next_token(ucpp_context, ls)) {
 		if (!ttWHI(ls->ctok->type) && (ls->flags & WARN_STANDARD)) {
-			warning(l, "trailing garbage in "
+			warning(ucpp_context, l, "trailing garbage in "
 				"preprocessing directive");
 		}
 		if (ls->ctok->type == NEWLINE) break;
 	}
 handle_exit:
-	if (!(ls->flags & LEXER)) put_char(ls, '\n');
+	if (!(ls->flags & LEXER)) put_char(ucpp_context, ls, '\n');
 handle_exit3:
-	if (protect_detect.state == 1) {
-		protect_detect.state = 0;
-	} else if (protect_detect.state == -1) {
+	if (ucpp_context->protect_detect.state == 1) {
+		ucpp_context->protect_detect.state = 0;
+	} else if (ucpp_context->protect_detect.state == -1) {
 		/* just after the #include */
-		protect_detect.state = 1;
+		ucpp_context->protect_detect.state = 1;
 	}
 handle_exit2:
 	ls->flags = save_flags;
 	return ret;
 too_many_if:
-	error(l, "too many levels of conditional inclusion (max 63)");
+	error(ucpp_context, l, "too many levels of conditional inclusion (max 63)");
 	ret = 1;
 	goto handle_warp;
 #undef condfset
@@ -2007,41 +1954,41 @@ too_many_if:
  * name.
  * return value: positive on error; CPPERR_EOF means "end of input reached"
  */
-int cpp(struct lexer_state *ls)
+int cpp(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	int r = 0;
 
-	while (next_token(ls)) {
-		if (protect_detect.state == 3) {
+	while (next_token(ucpp_context, ls)) {
+		if (ucpp_context->protect_detect.state == 3) {
 			/*
-			 * At that point, protect_detect.ff->protect might
+			 * At that point, ucpp_context->protect_detect.ff->protect might
 			 * be non-zero, if the file has been recursively
 			 * included, and a guardian detected.
 			 */
-			if (!protect_detect.ff->protect) {
+			if (!ucpp_context->protect_detect.ff->protect) {
 				/* Cool ! A new guardian has been detected. */
-				protect_detect.ff->protect =
-					protect_detect.macro;
-			} else if (protect_detect.macro) {
+				ucpp_context->protect_detect.ff->protect =
+					ucpp_context->protect_detect.macro;
+			} else if (ucpp_context->protect_detect.macro) {
 				/* We found a guardian but an old one. */
-				freemem(protect_detect.macro);
+				freemem(ucpp_context->protect_detect.macro);
 			}
-			protect_detect.macro = 0;
+			ucpp_context->protect_detect.macro = 0;
 		}
 		if (ls->ifnest) {
-			error(ls->line, "unterminated #if construction "
+			error(ucpp_context, ls->line, "unterminated #if construction "
 				"(depth %ld)", ls->ifnest);
 			r = CPPERR_NEST;
 		}
-		if (ls_depth == 0) return CPPERR_EOF;
+		if (ucpp_context->ls_depth == 0) return CPPERR_EOF;
 		close_input(ls);
 		if (!(ls->flags & LEXER) && !ls->ltwnl) {
-			put_char(ls, '\n');
+			put_char(ucpp_context, ls, '\n');
 			ls->ltwnl = 1;
 		}
-		pop_file_context(ls);
+		pop_file_context(ucpp_context, ls);
 		ls->oline ++;
-		if (enter_file(ls, ls->flags)) {
+		if (enter_file(ucpp_context, ls, ls->flags)) {
 			ls->ctok->type = NEWLINE;
 			ls->ltwnl = 1;
 			break;
@@ -2049,19 +1996,19 @@ int cpp(struct lexer_state *ls)
 	}
 	if (!(ls->ltwnl && (ls->ctok->type == SHARP
 		|| ls->ctok->type == DIG_SHARP))
-		&& protect_detect.state == 1 && !ttWHI(ls->ctok->type)) {
+		&& ucpp_context->protect_detect.state == 1 && !ttWHI(ls->ctok->type)) {
 		/* the first non-whitespace token encountered is not
 		   a sharp introducing a cpp directive */
-		protect_detect.state = 0;
+		ucpp_context->protect_detect.state = 0;
 	}
-	if (protect_detect.state == 3 && !ttWHI(ls->ctok->type)) {
+	if (ucpp_context->protect_detect.state == 3 && !ttWHI(ls->ctok->type)) {
 		/* a non-whitespace token encountered after the #endif */
-		protect_detect.state = 0;
+		ucpp_context->protect_detect.state = 0;
 	}
 	if (ls->condcomp) {
 		if (ls->ltwnl && (ls->ctok->type == SHARP
 			|| ls->ctok->type == DIG_SHARP)) {
-			int x = handle_cpp(ls, ls->ctok->type);
+			int x = handle_cpp(ucpp_context, ls, ls->ctok->type);
 
 			ls->ltwnl = 1;
 			return r ? r : x;
@@ -2069,22 +2016,22 @@ int cpp(struct lexer_state *ls)
 		if (ls->ctok->type == NAME) {
 			struct macro *m;
 
-			if ((m = get_macro(ls->ctok->name)) != 0) {
+			if ((m = get_macro(ucpp_context, ls->ctok->name)) != 0) {
 				int x;
 
-				x = substitute_macro(ls, m, 0, 1, 0,
+				x = substitute_macro(ucpp_context, ls, m, 0, 1, 0,
 					ls->ctok->line);
 				if (!(ls->flags & LEXER))
 					garbage_collect(ls->gf);
 				return r ? r : x;
 			}
 			if (!(ls->flags & LEXER))
-				print_token(ls, ls->ctok, 0);
+				print_token(ucpp_context, ls, ls->ctok, 0);
 		}
 	} else {
 		if (ls->ltwnl && (ls->ctok->type == SHARP
 			|| ls->ctok->type == DIG_SHARP)) {
-			int x = handle_cpp(ls, ls->ctok->type);
+			int x = handle_cpp(ucpp_context, ls, ls->ctok->type);
 
 			ls->ltwnl = 1;
 			return r ? r : x;
@@ -2100,7 +2047,7 @@ int cpp(struct lexer_state *ls)
  * llex() and lex() are the lexing functions, when the preprocessor is
  * linked to another code. llex() should be called only by lex().
  */
-static int llex(struct lexer_state *ls)
+static int llex(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	struct token_fifo *tf = ls->output_fifo;
 	int r;
@@ -2129,14 +2076,14 @@ static int llex(struct lexer_state *ls)
 			ls->ctok = ls->save_ctok;
 		}
 	}
-	r = cpp(ls);
+	r = cpp(ucpp_context, ls);
 	if (ls->ctok->type > DIGRAPH_TOKENS
 		&& ls->ctok->type < LAST_MEANINGFUL_TOKEN) {
 		ls->ctok->type = undig(ls->ctok->type);
 	}
 	if (r > 0) return r;
 	if (r < 0) return 0;
-	return llex(ls);
+	return llex(ucpp_context, ls);
 }
 
 /*
@@ -2145,12 +2092,12 @@ static int llex(struct lexer_state *ls)
  * return value: non zero on error (including CPPERR_EOF, which is not
  * quite an error)
  */
-int lex(struct lexer_state *ls)
+int lex(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	int r;
 
 	do {
-		r = llex(ls);
+		r = llex(ucpp_context, ls);
 #ifdef SEMPER_FIDELIS
 	} while (!r && !ls->condcomp);
 #else
@@ -2166,36 +2113,43 @@ int lex(struct lexer_state *ls)
  * it checks pending errors due to truncated constructs (actually none,
  * this is reserved for future evolutions).
  */
-int check_cpp_errors(struct lexer_state *ls)
+int check_cpp_errors(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	if (ls->flags & KEEP_OUTPUT) {
-		put_char(ls, '\n');
+		put_char(ucpp_context, ls, '\n');
 	}
 	if (emit_dependencies) fputc('\n', emit_output);
 #ifndef NO_UCPP_BUF
 	if (!(ls->flags & LEXER)) {
-		flush_output(ls);
+		flush_output(ucpp_context, ls);
 	}
 #endif
 	if ((ls->flags & WARN_TRIGRAPHS) && ls->count_trigraphs)
-		warning(0, "%ld trigraph(s) encountered", ls->count_trigraphs);
+		warning(ucpp_context, 0, "%ld trigraph(s) encountered", ls->count_trigraphs);
 	return 0;
 }
 
 /*
- * init_cpp() initializes static tables inside ucpp. It needs not be
- * called more than once.
+ * init_cpp() initializes tables inside ucpp.
  */
-void init_cpp(void)
+ucpp_context_t *init_cpp(void)
 {
-	init_cppm();
+	return init_cppm();
+}
+
+/*
+ * close_cpp() free tables inside ucpp.
+ */
+void close_cpp(ucpp_context_t *ucpp_context)
+{
+	close_cppm(ucpp_context);
 }
 
 /*
  * (re)init the global tables.
  * If standard_assertions is non 0, init the assertions table.
  */
-void init_tables(int with_assertions)
+void init_tables(ucpp_context_t *ucpp_context, int with_assertions)
 {
 	time_t t;
 	struct tm *ct;
@@ -2226,29 +2180,29 @@ void init_tables(int with_assertions)
 	strftime(compile_time, 12, "\"%H:%M:%S\"", ct);
 	strftime(compile_date, 24, "\"%b %d %Y\"", ct);
 #endif
-	init_macros();
-	if (with_assertions) init_assertions();
-	init_found_files();
+	init_macros(ucpp_context);
+	if (with_assertions) init_assertions(ucpp_context);
+	init_found_files(ucpp_context);
 }
 
 /*
  * Resets the include path.
  */
-void init_include_path(char *incpath[])
+void init_include_path(ucpp_context_t *ucpp_context, char *incpath[])
 {
-	if (include_path_nb) {
+	if (ucpp_context->include_path_nb) {
 		size_t i;
 
-		for (i = 0; i < include_path_nb; i ++)
-			freemem(include_path[i]);
-		freemem(include_path);
-		include_path_nb = 0;
+		for (i = 0; i < ucpp_context->include_path_nb; i ++)
+			freemem(ucpp_context->include_path[i]);
+		freemem(ucpp_context->include_path);
+		ucpp_context->include_path_nb = 0;
 	}
 	if (incpath) {
 		int i;
 
 		for (i = 0; incpath[i]; i ++)
-			aol(include_path, include_path_nb,
+			aol(ucpp_context->include_path, ucpp_context->include_path_nb,
 				sdup(incpath[i]), INCPATH_MEMG);
 	}
 }
@@ -2256,9 +2210,9 @@ void init_include_path(char *incpath[])
 /*
  * add_incpath() adds "path" to the standard include path.
  */
-void add_incpath(char *path)
+void add_incpath(ucpp_context_t *ucpp_context, char *path)
 {
-	aol(include_path, include_path_nb, sdup(path), INCPATH_MEMG);
+	aol(ucpp_context->include_path, ucpp_context->include_path_nb, sdup(path), INCPATH_MEMG);
 }
 
 /*
@@ -2266,40 +2220,40 @@ void add_incpath(char *path)
  * memory structures and may be called even if the current pre-processing
  * is not finished or reported an error.
  */
-void wipeout()
+void wipeout(ucpp_context_t *ucpp_context)
 {
 	struct lexer_state ls;
 
-	if (include_path_nb > 0) {
+	if (ucpp_context->include_path_nb > 0) {
 		size_t i;
 
-		for (i = 0; i < include_path_nb; i ++)
-			freemem(include_path[i]);
-		freemem(include_path);
-		include_path = 0;
-		include_path_nb = 0;
+		for (i = 0; i < ucpp_context->include_path_nb; i ++)
+			freemem(ucpp_context->include_path[i]);
+		freemem(ucpp_context->include_path);
+		ucpp_context->include_path = 0;
+		ucpp_context->include_path_nb = 0;
 	}
-	if (current_filename) freemem(current_filename);
-	current_filename = 0;
-	current_long_filename = 0;
-	current_incdir = -1;
-	protect_detect.state = 0;
-	if (protect_detect.macro) freemem(protect_detect.macro);
-	protect_detect.macro = 0;
-	protect_detect.ff = 0;
+	if (ucpp_context->current_filename) freemem(ucpp_context->current_filename);
+	ucpp_context->current_filename = 0;
+	ucpp_context->current_long_filename = 0;
+	ucpp_context->current_incdir = -1;
+	ucpp_context->protect_detect.state = 0;
+	if (ucpp_context->protect_detect.macro) freemem(ucpp_context->protect_detect.macro);
+	ucpp_context->protect_detect.macro = 0;
+	ucpp_context->protect_detect.ff = 0;
 	init_lexer_state(&ls);
-	while (ls_depth > 0) pop_file_context(&ls);
+	while (ucpp_context->ls_depth > 0) pop_file_context(ucpp_context, &ls);
 	free_lexer_state(&ls);
 	free_lexer_state(&dsharp_lexer);
 #ifdef PRAGMA_TOKENIZE
 	free_lexer_state(&tokenize_lexer);
 #endif
-	if (found_files_init_done) HTT_kill(&found_files);
-	found_files_init_done = 0;
-	if (found_files_sys_init_done) HTT_kill(&found_files_sys);
-	found_files_sys_init_done = 0;
-	wipe_macros();
-	wipe_assertions();
+	if (ucpp_context->found_files_init_done) HTT_kill(ucpp_context, &ucpp_context->found_files);
+	ucpp_context->found_files_init_done = 0;
+	if (ucpp_context->found_files_sys_init_done) HTT_kill(ucpp_context, &ucpp_context->found_files_sys);
+	ucpp_context->found_files_sys_init_done = 0;
+	wipe_macros(ucpp_context);
+	wipe_assertions(ucpp_context);
 }
 
 #ifdef STAND_ALONE
@@ -2354,14 +2308,14 @@ static void usage(char *command_name)
 /*
  * print version and compile-time settings
  */
-static void version(void)
+static void version(ucpp_context_t *ucpp_context)
 {
 	size_t i;
 
 	fprintf(stderr, "ucpp version %d.%d\n", VERS_MAJ, VERS_MIN);
 	fprintf(stderr, "search path:\n");
-	for (i = 0; i < include_path_nb; i ++)
-		fprintf(stderr, "  %s\n", include_path[i]);
+	for (i = 0; i < ucpp_context->include_path_nb; i ++)
+		fprintf(stderr, "  %s\n", ucpp_context->include_path[i]);
 }
 
 /*
@@ -2372,7 +2326,7 @@ static void version(void)
  * 1  on semantic error (redefinition of a special macro, for instance)
  * 2  on syntaxic error (unknown options for instance)
  */
-static int parse_opt(int argc, char *argv[], struct lexer_state *ls)
+static int parse_opt(ucpp_context_t *ucpp_context, int argc, char *argv[], struct lexer_state *ls)
 {
 	int i, ret = 0;
 	char *filename = 0;
@@ -2449,7 +2403,7 @@ static int parse_opt(int argc, char *argv[], struct lexer_state *ls)
 			i ++;
 		} else if (!strcmp(argv[i], "-o")) {
 			if ((++ i) >= argc) {
-				error(-1, "missing filename after -o");
+				error(ucpp_context, -1, "missing filename after -o");
 				return 2;
 			}
 			if (argv[i][0] == '-' && argv[i][1] == 0) {
@@ -2457,7 +2411,7 @@ static int parse_opt(int argc, char *argv[], struct lexer_state *ls)
 			} else {
 				ls->output = fopen(argv[i], "w");
 				if (!ls->output) {
-					error(-1, "failed to open for "
+					error(ucpp_context, -1, "failed to open for "
 						"writing: %s", argv[i]);
 					return 2;
 				}
@@ -2468,82 +2422,82 @@ static int parse_opt(int argc, char *argv[], struct lexer_state *ls)
 		} else if (argv[i][1] != 'I' && argv[i][1] != 'J'
 			&& argv[i][1] != 'D' && argv[i][1] != 'U'
 			&& argv[i][1] != 'A' && argv[i][1] != 'B')
-			warning(-1, "unknown option '%s'", argv[i]);
+			warning(ucpp_context, -1, "unknown option '%s'", argv[i]);
 	} else {
 		if (filename != 0) {
-			error(-1, "spurious filename '%s'", argv[i]);
+			error(ucpp_context, -1, "spurious filename '%s'", argv[i]);
 			return 2;
 		}
 		filename = argv[i];
 	}
-	init_tables(ls->flags & HANDLE_ASSERTIONS);
-	init_include_path(0);
+	init_tables(ucpp_context, ls->flags & HANDLE_ASSERTIONS);
+	init_include_path(ucpp_context, 0);
 	if (filename) {
 #ifdef UCPP_MMAP
-		FILE *f = fopen_mmap_file(filename);
+		FILE *f = fopen_mmap_file(ucpp_context, filename);
 
 		ls->input = 0;
-		if (f) set_input_file(ls, f);
+		if (f) set_input_file(ucpp_context, ls, f);
 #else
 		ls->input = fopen(filename, "r");
 #endif
 		if (!ls->input) {
-			error(-1, "file '%s' not found", filename);
+			error(ucpp_context, -1, "file '%s' not found", filename);
 			return 1;
 		}
 #ifdef NO_LIBC_BUF
 		setbuf(ls->input, 0);
 #endif
-		set_init_filename(filename, 1);
+		set_init_filename(ucpp_context, filename, 1);
 	} else {
 		ls->input = stdin;
-		set_init_filename("<stdin>", 0);
+		set_init_filename(ucpp_context, "<stdin>", 0);
 	}
 	for (i = 1; i < argc; i ++)
 		if (argv[i][0] == '-' && argv[i][1] == 'I')
-			add_incpath(argv[i][2] ? argv[i] + 2 : argv[i + 1]);
+			add_incpath(ucpp_context, argv[i][2] ? argv[i] + 2 : argv[i + 1]);
 	if (system_macros) for (i = 0; system_macros_def[i]; i ++)
-		ret = ret || define_macro(ls, system_macros_def[i]);
+		ret = ret || define_macro(ucpp_context, ls, system_macros_def[i]);
 	for (i = 1; i < argc; i ++)
 		if (argv[i][0] == '-' && argv[i][1] == 'D')
-			ret = ret || define_macro(ls, argv[i] + 2);
+			ret = ret || define_macro(ucpp_context, ls, argv[i] + 2);
 	for (i = 1; i < argc; i ++)
 		if (argv[i][0] == '-' && argv[i][1] == 'U')
-			ret = ret || undef_macro(ls, argv[i] + 2);
+			ret = ret || undef_macro(ucpp_context, ls, argv[i] + 2);
 	if (ls->flags & HANDLE_ASSERTIONS) {
 		if (standard_assertions)
 			for (i = 0; system_assertions_def[i]; i ++)
-				make_assertion(system_assertions_def[i]);
+				make_assertion(ucpp_context, system_assertions_def[i]);
 		for (i = 1; i < argc; i ++)
 			if (argv[i][0] == '-' && argv[i][1] == 'A')
-				ret = ret || make_assertion(argv[i] + 2);
+				ret = ret || make_assertion(ucpp_context, argv[i] + 2);
 		for (i = 1; i < argc; i ++)
 			if (argv[i][0] == '-' && argv[i][1] == 'B')
-				ret = ret || destroy_assertion(argv[i] + 2);
+				ret = ret || destroy_assertion(ucpp_context, argv[i] + 2);
 	} else {
 		for (i = 1; i < argc; i ++)
 			if (argv[i][0] == '-'
 				&& (argv[i][1] == 'A' || argv[i][1] == 'B'))
-				warning(-1, "assertions disabled");
+				warning(ucpp_context, -1, "assertions disabled");
 	}
 	if (with_std_incpath) {
 		for (i = 0; include_path_std[i]; i ++)
-			add_incpath(include_path_std[i]);
+			add_incpath(ucpp_context, include_path_std[i]);
 	}
 	for (i = 1; i < argc; i ++)
 		if (argv[i][0] == '-' && argv[i][1] == 'J')
-			add_incpath(argv[i][2] ? argv[i] + 2 : argv[i + 1]);
+			add_incpath(ucpp_context, argv[i][2] ? argv[i] + 2 : argv[i + 1]);
 
 	if (print_version) {
-		version();
+		version(ucpp_context);
 		return 1;
 	}
 	if (print_defs) {
-		print_defines();
+		print_defines(ucpp_context);
 		emit_defines = 1;
 	}
 	if (print_asserts && (ls->flags & HANDLE_ASSERTIONS)) {
-		print_assertions();
+		print_assertions(ucpp_context);
 		emit_assertions = 1;
 	}
 	return ret;
@@ -2553,20 +2507,32 @@ int main(int argc, char *argv[])
 {
 	struct lexer_state ls;
 	int r, fr = 0;
+        ucpp_context_t *ucpp_context;
 
-	init_cpp();
-	if ((r = parse_opt(argc, argv, &ls)) != 0) {
+	ucpp_context = init_cpp();
+	if ((r = parse_opt(ucpp_context, argc, argv, &ls)) != 0) {
 		if (r == 2) usage(argv[0]);
 		return EXIT_FAILURE;
 	}
-	enter_file(&ls, ls.flags);
-	while ((r = cpp(&ls)) < CPPERR_EOF) fr = fr || (r > 0);
-	fr = fr || check_cpp_errors(&ls);
+	enter_file(ucpp_context, &ls, ls.flags);
+	while ((r = cpp(ucpp_context, &ls)) < CPPERR_EOF) fr = fr || (r > 0);
+	fr = fr || check_cpp_errors(ucpp_context, &ls);
 	free_lexer_state(&ls);
-	wipeout();
+	wipeout(ucpp_context);
 #ifdef MEM_DEBUG
 	report_leaks();
 #endif
+	close_cpp(ucpp_context);
 	return fr ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 #endif
+
+char *current_filename(ucpp_context_t *ucpp_context)
+{
+  return ucpp_context->current_filename;
+}
+
+char *current_long_filename(ucpp_context_t *ucpp_context)
+{
+  return ucpp_context->current_long_filename;
+}

@@ -31,6 +31,7 @@
 #define UCPP__NHASH__
 
 #include <ucpp/export.h>
+#include <ucpp/context.h>
 
 /*
  * Each item stored in the hash table should be a structure beginning
@@ -96,19 +97,19 @@ ucpp_EXPORT void HTT_init(HTT *htt, void (*deldata)(void *));
  * table and NULL is returned. The object pointed to by `item' is
  * linked from the table, but not the string pointed to by `name'.
  */
-ucpp_EXPORT void *HTT_put(HTT *htt, void *item, char *name);
+ucpp_EXPORT void *HTT_put(ucpp_context_t *ucpp_context, HTT *htt, void *item, char *name);
 
 /*
  * Retrieve an item by name from the hash table. NULL is returned if
  * the object is not found.
  */
-ucpp_EXPORT void *HTT_get(HTT *htt, char *name);
+ucpp_EXPORT void *HTT_get(ucpp_context_t *ucpp_context, HTT *htt, char *name);
 
 /*
  * Remove an item from the hash table. 1 is returned if the item was
  * removed, 0 if it was not found.
  */
-ucpp_EXPORT int HTT_del(HTT *htt, char *name);
+ucpp_EXPORT int HTT_del(ucpp_context_t *ucpp_context, HTT *htt, char *name);
 
 /*
  * For all items stored within the hash table, invoke the provided
@@ -122,7 +123,7 @@ ucpp_EXPORT void HTT_scan(HTT *htt, void (*action)(void *));
  * Release the whole table contents. After a call to this function,
  * the table is ready to accept new items.
  */
-ucpp_EXPORT void HTT_kill(HTT *htt);
+  ucpp_EXPORT void HTT_kill(ucpp_context_t *ucpp_context, HTT *htt);
 
 /*
  * The following functions are identical to the HTT_*() functions, except

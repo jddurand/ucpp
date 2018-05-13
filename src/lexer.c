@@ -39,7 +39,7 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #endif
-
+#include "ucpp/internal/context.h"
 /*
  * Character classes for description of the automaton.
  * The characters used for representing classes should not appear
@@ -66,22 +66,7 @@
 #define PUT(x)		((x) | 1024)
 #define ttPUT(x)	((x) & 1024)
 
-/* order is important */
-enum {
-	S_START, S_SPACE, S_BANG, S_STRING, S_STRING2, S_COLON,
-	S_SHARP, S_PCT, S_PCT2, S_PCT3, S_AMPER, S_CHAR, S_CHAR2, S_STAR,
-	S_PLUS, S_MINUS, S_DOT, S_DOT2, S_SLASH, S_NUMBER, S_NUMBER2, S_LT,
-	S_LT2, S_EQ, S_GT, S_GT2, S_CIRC, S_PIPE, S_BACKSLASH,
-	S_COMMENT, S_COMMENT2, S_COMMENT3, S_COMMENT4, S_COMMENT5,
-	S_NAME, S_NAME_BS, S_LCHAR,
-	MSTATE,
-	S_ILL, S_DDOT, S_DDSHARP, S_BS, S_ROGUE_BS, S_BEHEAD, S_DECAY,
-	S_TRUNC, S_TRUNCC, S_OUCH
-};
-
 #define CMT(x)		((x) >= S_COMMENT && (x) <= S_COMMENT5)
-
-#define CMCR	2
 
 /*
  * This is the description of the automaton. It is not used "as is"
@@ -91,11 +76,7 @@ enum {
  * (which uses the transformed automaton) about the special handling
  * of slashes, sharps, and the letter L.
  */
-static struct machine_state {
-	int state;
-	unsigned char input[CMCR];
-	int new_state;
-} cppms[] = {
+machine_state_t cppms_template[] = {
 	/* S_START is the generic beginning state */
 	{ S_START,	{ ANY },	S_ILL			},
 #ifdef SEMPER_FIDELIS
@@ -336,85 +317,116 @@ static struct machine_state {
 };
 
 /*
- * cppm is the table used to store the automaton: if we are in state s
- * and we read character c, we apply the action cppm[s][c] (jumping to
- * another state, or emitting a token).
- * cppm_vch is the table for the special virtual character "end of input"
- */
-static int cppm[MSTATE][MAX_CHAR_VAL];
-static int cppm_vch[MSTATE];
-
-/*
  * init_cppm() fills cppm[][] with the information stored in cppms[].
  * It must be called before beginning the lexing process.
  */
-void init_cppm(void)
+ucpp_context_t *init_cppm(void)
 {
 	int i, j, k, c;
 	static unsigned char upper[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	static unsigned char lower[] = "abcdefghijklmnopqrstuvwxyz";
 	unsigned char *cp;
+        ucpp_context_t *ucpp_context;
+        size_t machine_state_number_of_elements = 0;
+
+        ucpp_context = (ucpp_context_t *) malloc(sizeof(ucpp_context_t));
+        if (ucpp_context == NULL) {
+          return NULL;
+        }
+        for (machine_state_number_of_elements = 0; cppms_template[machine_state_number_of_elements].input[0]; machine_state_number_of_elements ++) {
+        }
+
+        ucpp_context->cppms = (machine_state_t *) malloc(sizeof(machine_state_t) * ++machine_state_number_of_elements);
+        if (ucpp_context->cppms == NULL) {
+          free(ucpp_context);
+          return NULL;
+        }
+        memcpy(ucpp_context->cppms, cppms_template, sizeof(machine_state_t) * machine_state_number_of_elements);
+        ucpp_context->assertions_init_done = 0;
+        ucpp_context->found_files_init_done = 0;
+        ucpp_context->found_files_sys_init_done = 0;
+        ucpp_context->macros_init_done = 0;
+        ucpp_context->include_path = 0;
+        ucpp_context->include_path_nb = 0;
+        ucpp_context->current_filename = 0;
+        ucpp_context->current_long_filename = 0;
+        ucpp_context->current_incdir = -1;
+        ucpp_context->protect_detect;
+        ucpp_context->protect_detect_stack = 0;
+        ucpp_context->ls_depth = 0;
 
 	for (i = 0; i < MSTATE; i ++) {
-		for (j = 0; j < MAX_CHAR_VAL; j ++) cppm[i][j] = S_OUCH;
-		cppm_vch[i] = S_OUCH;
+		for (j = 0; j < MAX_CHAR_VAL; j ++) ucpp_context->cppm[i][j] = S_OUCH;
+		ucpp_context->cppm_vch[i] = S_OUCH;
 	}
-	for (i = 0; cppms[i].input[0]; i ++) for (k = 0; k < CMCR; k ++) {
-		int s = cppms[i].state;
-		int ns = cppms[i].new_state;
+	for (i = 0; ucpp_context->cppms[i].input[0]; i ++) for (k = 0; k < CMCR; k ++) {
+		int s = ucpp_context->cppms[i].state;
+		int ns = ucpp_context->cppms[i].new_state;
 
-		switch (c = cppms[i].input[k]) {
+		switch (c = ucpp_context->cppms[i].input[k]) {
 		case 0:
 			break;
 		case SPC:
 			/* see space_char() also */
-			cppm[s][' '] = ns;
-			cppm[s]['\t'] = ns;
-			cppm[s]['\v'] = ns;
-			cppm[s]['\f'] = ns;
+			ucpp_context->cppm[s][' '] = ns;
+			ucpp_context->cppm[s]['\t'] = ns;
+			ucpp_context->cppm[s]['\v'] = ns;
+			ucpp_context->cppm[s]['\f'] = ns;
 #ifdef UNBREAKABLE_SPACE
 			if (MAX_CHAR_VAL > UNBREAKABLE_SPACE)
-				cppm[s][UNBREAKABLE_SPACE] = ns;
+				ucpp_context->cppm[s][UNBREAKABLE_SPACE] = ns;
 #endif
 			break;
 		case ALP:
-			for (cp = upper; *cp; cp ++) cppm[s][(int)*cp] = ns;
-			for (cp = lower; *cp; cp ++) cppm[s][(int)*cp] = ns;
-			cppm[s]['_'] = ns;
+			for (cp = upper; *cp; cp ++) ucpp_context->cppm[s][(int)*cp] = ns;
+			for (cp = lower; *cp; cp ++) ucpp_context->cppm[s][(int)*cp] = ns;
+			ucpp_context->cppm[s]['_'] = ns;
 			break;
 		case NUM:
-			for (j = '0'; j <= '9'; j ++) cppm[s][j] = ns;
+			for (j = '0'; j <= '9'; j ++) ucpp_context->cppm[s][j] = ns;
 			break;
 		case ANY:
-			for (j = 0; j < MAX_CHAR_VAL; j ++) cppm[s][j] = ns;
-			cppm_vch[s] = ns;
+			for (j = 0; j < MAX_CHAR_VAL; j ++) ucpp_context->cppm[s][j] = ns;
+			ucpp_context->cppm_vch[s] = ns;
 			break;
 		case VCH:
-			cppm_vch[s] = ns;
+			ucpp_context->cppm_vch[s] = ns;
 			break;
 		default:
-			cppm[s][c] = ns;
+			ucpp_context->cppm[s][c] = ns;
 			break;
 		}
 	}
+
+        return ucpp_context;
+}
+
+void close_cppm(ucpp_context_t *ucpp_context)
+{
+  if (ucpp_context != NULL) {
+    if (ucpp_context->cppms != NULL) {
+      free(ucpp_context->cppms);
+    }
+    free(ucpp_context);
+  }
 }
 
 /*
  * Make some character as equivalent to a letter for identifiers.
  */
-void set_identifier_char(int c)
+void set_identifier_char(ucpp_context_t *ucpp_context, int c)
 {
-	cppm[S_START][c] = PUT(S_NAME);
-	cppm[S_NAME][c] = PUT(S_NAME);
+	ucpp_context->cppm[S_START][c] = PUT(S_NAME);
+	ucpp_context->cppm[S_NAME][c] = PUT(S_NAME);
 }
 
 /*
  * Remove the "identifier" status from a character.
  */
-void unset_identifier_char(int c)
+void unset_identifier_char(ucpp_context_t *ucpp_context, int c)
 {
-	cppm[S_START][c] = S_ILL;
-	cppm[S_NAME][c] = FRZ(STO(NAME));
+	ucpp_context->cppm[S_START][c] = S_ILL;
+	ucpp_context->cppm[S_NAME][c] = FRZ(STO(NAME));
 }
 
 int space_char(int c)
@@ -431,7 +443,7 @@ int space_char(int c)
 /*
  * our output buffer is full, flush it
  */
-void flush_output(struct lexer_state *ls)
+void flush_output(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	size_t x = ls->sbuf, y = 0, z;
 
@@ -442,7 +454,7 @@ void flush_output(struct lexer_state *ls)
 		y += z;
 	} while (z && x > 0);
 	if (!y) {
-		error(ls->line, "could not flush output (disk full ?)");
+		error(ucpp_context, ls->line, "could not flush output (disk full ?)");
 		die();
 	}
 	ls->sbuf = 0;
@@ -453,14 +465,14 @@ void flush_output(struct lexer_state *ls)
  * Output one character; flush the buffer if needed.
  * This function should not be called, except by put_char().
  */
-static inline void write_char(struct lexer_state *ls, unsigned char c)
+static inline void write_char(ucpp_context_t *ucpp_context, struct lexer_state *ls, unsigned char c)
 {
 #ifndef NO_UCPP_BUF
 	ls->output_buf[ls->sbuf ++] = c;
-	if (ls->sbuf == OUTPUT_BUF_MEMG) flush_output(ls);
+	if (ls->sbuf == OUTPUT_BUF_MEMG) flush_output(ucpp_context, ls);
 #else
 	if (putc((int)c, ls->output) == EOF) {
-		error(ls->line, "output write error (disk full ?)");
+		error(ucpp_context, ls->line, "output write error (disk full ?)");
 		die();
 	}
 #endif
@@ -472,9 +484,9 @@ static inline void write_char(struct lexer_state *ls, unsigned char c)
 /*
  * schedule a character for output
  */
-void put_char(struct lexer_state *ls, unsigned char c)
+void put_char(ucpp_context_t *ucpp_context, struct lexer_state *ls, unsigned char c)
 {
-	if (ls->flags & KEEP_OUTPUT) write_char(ls, c);
+	if (ls->flags & KEEP_OUTPUT) write_char(ucpp_context, ls, c);
 }
 
 /*
@@ -595,7 +607,7 @@ static struct trigraph {
  * Returns the next character, after treatment of trigraphs and terminating
  * backslashes. Return value is -1 if there is no more input.
  */
-static inline int next_char(struct lexer_state *ls)
+static inline int next_char(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	int c;
 
@@ -614,7 +626,7 @@ static inline int next_char(struct lexer_state *ls)
 					ls->count_trigraphs ++;
 				}
 				if (ls->flags & WARN_TRIGRAPHS_MORE) {
-					warning(ls->line, "trigraph ?""?%c "
+					warning(ucpp_context, ls->line, "trigraph ?""?%c "
 						"encountered", d);
 				}
 				next_fifo_char(ls);
@@ -642,9 +654,9 @@ static inline int next_char(struct lexer_state *ls)
  * wrapper for next_char(), to be called from outside
  * (used by #error, #include directives)
  */
-int grap_char(struct lexer_state *ls)
+int grap_char(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
-	return next_char(ls);
+	return next_char(ucpp_context, ls);
 }
 
 /*
@@ -716,7 +728,7 @@ static int utf8_to_string(unsigned char buf[], unsigned long utf8)
  *  -- inside \u and \U, make letters low case
  *  -- report (some) incorrect use of UCN
  */
-static void canonize_id(struct lexer_state *ls, char *id)
+static void canonize_id(ucpp_context_t *ucpp_context, struct lexer_state *ls, char *id)
 {
 	char *c, *d;
 
@@ -779,7 +791,7 @@ static void canonize_id(struct lexer_state *ls, char *id)
 canon_error:
 	for (; *c; *(d ++) = *(c ++));
 	if (ls->flags & WARN_STANDARD) {
-		warning(ls->line, "malformed identifier with UCN: '%s'", id);
+		warning(ucpp_context, ls->line, "malformed identifier with UCN: '%s'", id);
 	}
 	*d = 0;
 }
@@ -790,7 +802,7 @@ canon_error:
  *
  * return value: 1 on error, 2 on end-of-file, 0 otherwise.
  */
-static inline int read_token(struct lexer_state *ls)
+static inline int read_token(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	int cstat = S_START, nstat;
 	size_t ltok = 0;
@@ -813,25 +825,25 @@ static inline int read_token(struct lexer_state *ls)
 		shift_state = 0;
 	}
 	if (!(ls->flags & LEXER) && (ls->flags & KEEP_OUTPUT))
-		for (; ls->line > ls->oline;) put_char(ls, '\n');
+		for (; ls->line > ls->oline;) put_char(ucpp_context, ls, '\n');
 	do {
-		c = next_char(ls);
+		c = next_char(ucpp_context, ls);
 		if (c < 0) {
 			if ((ls->flags & UTF8_SOURCE) && shift_state) {
 				if (ls->flags & WARN_STANDARD)
-					warning(ls->line, "truncated UTF-8 "
+					warning(ucpp_context, ls->line, "truncated UTF-8 "
 						"character");
 				shift_state = 0;
 				utf8 = 0;
 			}
 			if (cstat == S_START) return 2;
-			nstat = cppm_vch[cstat];
+			nstat = ucpp_context->cppm_vch[cstat];
 		} else {
 			if (ls->flags & UTF8_SOURCE) {
 				if (shift_state) {
 					if ((c & 0xc0) != 0x80) {
 						if (ls->flags & WARN_STANDARD)
-							warning(ls->line,
+							warning(ucpp_context, ls->line,
 								"truncated "
 								"UTF-8 "
 								"character");
@@ -859,7 +871,7 @@ static inline int read_token(struct lexer_state *ls)
 					continue;
 				} else utf8 = 0;
 			}
-			nstat = cppm[cstat][c < MAX_CHAR_VAL ? c : 0];
+			nstat = ucpp_context->cppm[cstat][c < MAX_CHAR_VAL ? c : 0];
 		}
 #ifdef AUDIT
 		if (nstat == S_OUCH) {
@@ -876,7 +888,7 @@ static inline int read_token(struct lexer_state *ls)
 			switch (noMOD(nstat)) {
 		case S_ILL:
 			if (ls->flags & CCHARSET) {
-				error(ls->line, "illegal character '%c'", c);
+				error(ucpp_context, ls->line, "illegal character '%c'", c);
 				return 1;
 			}
 			nstat = PUT(STO(BUNCH));
@@ -885,7 +897,7 @@ static inline int read_token(struct lexer_state *ls)
 			ls->ctok->name[0] = '\\';
 			ltok ++;
 			nstat = FRZ(STO(BUNCH));
-			if (!(ls->flags & LEXER)) put_char(ls, '\\');
+			if (!(ls->flags & LEXER)) put_char(ucpp_context, ls, '\\');
 			break;
 		case S_ROGUE_BS:
 			ls->pending_token = BUNCH;
@@ -900,17 +912,17 @@ static inline int read_token(struct lexer_state *ls)
 			nstat = FRZ(STO(DIG_SHARP));
 			break;
 		case S_BEHEAD:
-			error(l, "unfinished string at end of line");
+			error(ucpp_context, l, "unfinished string at end of line");
 			return 1;
 		case S_DECAY:
-			warning(l, "unterminated // comment");
+			warning(ucpp_context, l, "unterminated // comment");
 			nstat = FRZ(STO(COMMENT));
 			break;
 		case S_TRUNC:
-			error(l, "truncated token");
+			error(ucpp_context, l, "truncated token");
 			return 1;
 		case S_TRUNCC:
-			error(l, "truncated comment");
+			error(ucpp_context, l, "truncated comment");
 			return 1;
 #ifdef AUDIT
 		case S_OUCH:
@@ -940,22 +952,22 @@ static inline int read_token(struct lexer_state *ls)
 					outc = -2;
 				} else {
 					if (outc < 0) {
-						put_char(ls, '%');
-						put_char(ls, ':');
+						put_char(ucpp_context, ls, '%');
+						put_char(ucpp_context, ls, ':');
 						if (outc == -2)
-							put_char(ls, '%');
+							put_char(ucpp_context, ls, '%');
 						outc = 0;
 					} else if (outc) {
-						put_char(ls, outc);
+						put_char(ucpp_context, ls, outc);
 						outc = 0;
 					}
-					put_char(ls, c);
+					put_char(ucpp_context, ls, c);
 				}
 			}
 		} else if (outc == '/' && !(ls->flags & LEXER)
 			&& ls->condcomp) {
 			/* this is a hack: we need to dump a pending slash */
-			put_char(ls, outc);
+			put_char(ucpp_context, ls, outc);
 			outc = 0;
 		}
 		if (ttPUT(nstat)) {
@@ -986,16 +998,16 @@ static inline int read_token(struct lexer_state *ls)
 		cstat = noMOD(nstat);
 	} while (1);
 	if (!(ls->flags & LEXER) && (ls->flags & DISCARD_COMMENTS)
-			&& ls->ctok->type == COMMENT) put_char(ls, ' ');
+			&& ls->ctok->type == COMMENT) put_char(ucpp_context, ls, ' ');
 	if (ucn_in_id && ls->ctok->type == NAME)
-		canonize_id(ls, ls->ctok->name);
+		canonize_id(ucpp_context, ls, ls->ctok->name);
 	return 0;
 }
 
 /*
  * fills ls->ctok with the next token
  */
-int next_token(struct lexer_state *ls)
+int next_token(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	if (ls->flags & READ_AGAIN) {
 		ls->flags &= ~READ_AGAIN;
@@ -1008,13 +1020,13 @@ int next_token(struct lexer_state *ls)
 				ls->ctok->name[0] = ' ';
 				ls->ctok->name[1] = 0;
 #endif
-				put_char(ls, ' ');
+				put_char(ucpp_context, ls, ' ');
 			} else if (ls->ctok->type != NAME &&
 				!(ls->ltwnl && (ls->ctok->type == SHARP
 					|| ls->ctok->type == DIG_SHARP)))
-				for (; *c; c ++) put_char(ls, *c);
+				for (; *c; c ++) put_char(ucpp_context, ls, *c);
 		}
 		return 0;
 	}
-	return read_token(ls);
+	return read_token(ucpp_context, ls);
 }

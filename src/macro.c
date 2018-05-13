@@ -34,14 +34,8 @@
 #include <limits.h>
 #include "ucpp/ucppi.h"
 #include "ucpp/internal/mem.h"
+#include "ucpp/internal/context.h"
 #include "ucpp/nhash.h"
-
-/*
- * we store macros in a hash table, and retrieve them using their name
- * as identifier.
- */
-static HTT macros;
-static int macros_init_done = 0;
 
 static void del_macro(void *m)
 {
@@ -115,18 +109,18 @@ int c99_hosted = 1;
 /*
  * add the special macros to the macro table
  */
-static void add_special_macros(void)
+static void add_special_macros(ucpp_context_t *ucpp_context)
 {
 	struct macro *m;
 
-	HTT_put(&macros, new_macro(), "__LINE__");
-	HTT_put(&macros, new_macro(), "__FILE__");
-	HTT_put(&macros, new_macro(), "__DATE__");
-	HTT_put(&macros, new_macro(), "__TIME__");
-	HTT_put(&macros, new_macro(), "__STDC__");
+	HTT_put(ucpp_context, &ucpp_context->macros, new_macro(), "__LINE__");
+	HTT_put(ucpp_context, &ucpp_context->macros, new_macro(), "__FILE__");
+	HTT_put(ucpp_context, &ucpp_context->macros, new_macro(), "__DATE__");
+	HTT_put(ucpp_context, &ucpp_context->macros, new_macro(), "__TIME__");
+	HTT_put(ucpp_context, &ucpp_context->macros, new_macro(), "__STDC__");
 	m = new_macro(); m->narg = 1;
 	m->arg = getmem(sizeof(char *)); m->arg[0] = sdup("foo");
-	HTT_put(&macros, m, "_Pragma");
+	HTT_put(ucpp_context, &ucpp_context->macros, m, "_Pragma");
 	if (c99_compliant) {
 #ifndef LOW_MEM
 		struct token t;
@@ -144,7 +138,7 @@ static void add_special_macros(void)
 		t.name = sdup("199901L");
 		aol(m->val.t, m->val.nt, t, TOKEN_LIST_MEMG);
 #endif
-		HTT_put(&macros, m, "__STDC_VERSION__");
+		HTT_put(ucpp_context, &ucpp_context->macros, m, "__STDC_VERSION__");
 	}
 	if (c99_hosted) {
 #ifndef LOW_MEM
@@ -163,7 +157,7 @@ static void add_special_macros(void)
 		t.name = sdup("1");
 		aol(m->val.t, m->val.nt, t, TOKEN_LIST_MEMG);
 #endif
-		HTT_put(&macros, m, "__STDC_HOSTED__");
+		HTT_put(ucpp_context, &ucpp_context->macros, m, "__STDC_HOSTED__");
 	}
 }
 
@@ -252,7 +246,7 @@ static void print_macro(void *vm)
  * Send a token to the output (a token_fifo in lexer mode, the output
  * buffer in stand alone mode).
  */
-void print_token(struct lexer_state *ls, struct token *t, long uz_line)
+void print_token(ucpp_context_t *ucpp_context, struct lexer_state *ls, struct token *t, long uz_line)
 {
 	char *x = t->name;
 
@@ -270,40 +264,40 @@ void print_token(struct lexer_state *ls, struct token *t, long uz_line)
 		return;
 	}
 	if (ls->flags & KEEP_OUTPUT) {
-		for (; ls->oline < ls->line;) put_char(ls, '\n');
+		for (; ls->oline < ls->line;) put_char(ucpp_context, ls, '\n');
 	}
 	if (!S_TOKEN(t->type)) x = operators_name(t->type);
-	for (; *x; x ++) put_char(ls, *x);
+	for (; *x; x ++) put_char(ucpp_context, ls, *x);
 }
 
 /*
  * Send a token to the output at a given line (this is for text output
  * and unreplaced macros due to lack of arguments).
  */
-static void print_token_nailed(struct lexer_state *ls, struct token *t,
+static void print_token_nailed(ucpp_context_t *ucpp_context, struct lexer_state *ls, struct token *t,
 	long nail_line)
 {
 	char *x = t->name;
 
 	if (ls->flags & LEXER) {
-		print_token(ls, t, 0);
+		print_token(ucpp_context, ls, t, 0);
 		return;
 	}
 	if (ls->flags & KEEP_OUTPUT) {
-		for (; ls->oline < nail_line;) put_char(ls, '\n');
+		for (; ls->oline < nail_line;) put_char(ucpp_context, ls, '\n');
 	}
 	if (!S_TOKEN(t->type)) x = operators_name(t->type);
-	for (; *x; x ++) put_char(ls, *x);
+	for (; *x; x ++) put_char(ucpp_context, ls, *x);
 }
 
 /*
  * send a reduced whitespace token to the output
  */
-#define print_space(ls)	do { \
+#define print_space(ucpp_context, ls)	do { \
 		struct token lt; \
 		lt.type = OPT_NONE; \
 		lt.line = (ls)->line; \
-		print_token((ls), &lt, 0); \
+		print_token((ucpp_context), (ls), &lt, 0);      \
 	} while (0)
 
 /*
@@ -315,7 +309,7 @@ static void print_token_nailed(struct lexer_state *ls, struct token *t,
  * parameters. We emit an error on offending code; dura lex, sed lex.
  * After all, it is easy to avoid such problems, with a #undef directive.
  */
-int handle_define(struct lexer_state *ls)
+int handle_define(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
 	struct macro *m = 0, *n;
 #ifdef LOW_MEM
@@ -332,17 +326,17 @@ int handle_define(struct lexer_state *ls)
 #endif
 	/* find the next non-white token on the line, this should be
 	   the macro name */
-	while (!next_token(ls) && ls->ctok->type != NEWLINE) {
+	while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE) {
 		if (ttMWS(ls->ctok->type)) continue;
 		if (ls->ctok->type == NAME) mname = sdup(ls->ctok->name);
 		break;
 	}
 	if (mname == 0) {
-		error(l, "missing macro name");
+		error(ucpp_context, l, "missing macro name");
 		return 1;
 	}
 	if (check_special_macro(mname)) {
-		error(l, "trying to redefine the special macro %s", mname);
+		error(ucpp_context, l, "trying to redefine the special macro %s", mname);
 		goto warp_error;
 	}
 	/*
@@ -356,7 +350,7 @@ int handle_define(struct lexer_state *ls)
 	 * Since it is easy to avoid this error (with a #undef directive),
 	 * we choose to enforce the rule and emit an error.
 	 */
-	if ((n = HTT_get(&macros, mname)) != 0) {
+	if ((n = HTT_get(ucpp_context, &ucpp_context->macros, mname)) != 0) {
 		/* redefinition of a macro: we must check that we define
 		   it identical */
 		redef = 1;
@@ -375,7 +369,7 @@ int handle_define(struct lexer_state *ls)
 #define mval	(m->val)
 #endif
 	}
-	if (next_token(ls)) goto define_end;
+	if (next_token(ucpp_context, ls)) goto define_end;
 	/*
 	 * Check if the token immediately following the macro name is
 	 * a left parenthesis; if so, then this is a macro with arguments.
@@ -386,31 +380,31 @@ int handle_define(struct lexer_state *ls)
 		int need_comma = 0, saw_mdots = 0;
 
 		narg = 0;
-		while (!next_token(ls)) {
+		while (!next_token(ucpp_context, ls)) {
 			if (ls->ctok->type == NEWLINE) {
-				error(l, "truncated macro definition");
+				error(ucpp_context, l, "truncated macro definition");
 				goto define_error;
 			}
 			if (ls->ctok->type == COMMA) {
 				if (saw_mdots) {
-					error(l, "'...' must end the macro "
+					error(ucpp_context, l, "'...' must end the macro "
 						"argument list");
 					goto warp_error;
 				}
 				if (!need_comma) {
-					error(l, "void macro argument");
+					error(ucpp_context, l, "void macro argument");
 					goto warp_error;
 				}
 				need_comma = 0;
 				continue;
 			} else if (ls->ctok->type == NAME) {
 				if (saw_mdots) {
-					error(l, "'...' must end the macro "
+					error(ucpp_context, l, "'...' must end the macro "
 						"argument list");
 					goto warp_error;
 				}
 				if (need_comma) {
-					error(l, "missing comma in "
+					error(ucpp_context, l, "missing comma in "
 						"macro argument list");
 					goto warp_error;
 				}
@@ -423,12 +417,12 @@ int handle_define(struct lexer_state *ls)
 					m->narg = narg;
 					if (narg == 128
 						&& (ls->flags & WARN_STANDARD))
-						warning(l, "more arguments to "
+						warning(ucpp_context, l, "more arguments to "
 							"macro than the ISO "
 							"limit (127)");
 #ifdef LOW_MEM
 					if (narg == 32767) {
-						error(l, "too many arguments "
+						error(ucpp_context, l, "too many arguments "
 							"in macro definition "
 							"(max 32766)");
 						goto warp_error;
@@ -448,7 +442,7 @@ int handle_define(struct lexer_state *ls)
 			} else if ((ls->flags & MACRO_VAARG)
 				&& ls->ctok->type == MDOTS) {
 				if (need_comma) {
-					error(l, "missing comma before '...'");
+					error(ucpp_context, l, "missing comma before '...'");
 					goto warp_error;
 				}
 				if (redef && !n->vaarg) goto redef_error;
@@ -458,7 +452,7 @@ int handle_define(struct lexer_state *ls)
 				continue;
 			} else if (ls->ctok->type == RPAR) {
 				if (narg > 0 && !need_comma) {
-					error(l, "void macro argument");
+					error(ucpp_context, l, "void macro argument");
 					goto warp_error;
 				}
 				if (redef && n->vaarg && !saw_mdots)
@@ -467,13 +461,13 @@ int handle_define(struct lexer_state *ls)
 			} else if (ttMWS(ls->ctok->type)) {
 				continue;
 			}
-			error(l, "invalid macro argument");
+			error(ucpp_context, l, "invalid macro argument");
 			goto warp_error;
 		}
 		if (!redef) {
 			for (i = 1; i < narg; i ++) for (j = 0; j < i; j ++)
 				if (!strcmp(m->arg[i], m->arg[j])) {
-					error(l, "duplicate macro "
+					error(ucpp_context, l, "duplicate macro "
 						"argument");
 					goto warp_error;
 				}
@@ -481,7 +475,7 @@ int handle_define(struct lexer_state *ls)
 		if (!redef) m->narg = narg;
 	} else {
 		if (!ttWHI(ls->ctok->type) && (ls->flags & WARN_STANDARD))
-			warning(ls->line, "identifier not followed by "
+			warning(ucpp_context, ls->line, "identifier not followed by "
 				"whitespace in #define");
 		ls->flags |= READ_AGAIN;
 		narg = 0;
@@ -489,7 +483,7 @@ int handle_define(struct lexer_state *ls)
 	if (redef) nt = 0;
 
 	/* now, we have the arguments. Let's get the macro contents. */
-	while (!next_token(ls) && ls->ctok->type != NEWLINE) {
+	while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE) {
 		struct token t;
 
 		t.type = ls->ctok->type;
@@ -503,7 +497,7 @@ int handle_define(struct lexer_state *ls)
 				if (redef) {
 					if (!n->vaarg) goto redef_error;
 				} else if (!m->vaarg) {
-					error(l, "'__VA_ARGS__' is forbidden "
+					error(ucpp_context, l, "'__VA_ARGS__' is forbidden "
 						"in macros with a fixed "
 						"number of arguments");
 					goto warp_error;
@@ -613,7 +607,7 @@ define_end:
 			|| mval.t[0].type == DIG_DSHARP
 			|| mval.t[mval.nt - 1].type == DSHARP
 			|| mval.t[mval.nt - 1].type == DIG_DSHARP) {
-			error(l, "operator '##' may neither begin "
+			error(ucpp_context, l, "operator '##' may neither begin "
 				"nor end a macro");
 			goto define_error;
 		}
@@ -626,7 +620,7 @@ define_end:
 				     || mval.t[i + 2].type != MACROARG))
 				|| (!ttMWS(mval.t[i + 1].type)
 				     && mval.t[i + 1].type != MACROARG))) {
-				error(l, "operator '#' not followed "
+				error(ucpp_context, l, "operator '#' not followed "
 					"by a macro argument");
 				goto define_error;
 			}
@@ -669,18 +663,18 @@ define_end:
 		if (mval.nt) freemem(mval.t);
 	}
 #endif
-	HTT_put(&macros, m, mname);
+	HTT_put(ucpp_context, &ucpp_context->macros, m, mname);
 	freemem(mname);
 	if (emit_defines) print_macro(m);
 	return 0;
 
 redef_error:
-	while (ls->ctok->type != NEWLINE && !next_token(ls));
+	while (ls->ctok->type != NEWLINE && !next_token(ucpp_context, ls));
 redef_error_2:
-	error(l, "macro '%s' redefined unidentically", HASH_ITEM_NAME(n));
+	error(ucpp_context, l, "macro '%s' redefined unidentically", HASH_ITEM_NAME(n));
 	return 1;
 warp_error:
-	while (ls->ctok->type != NEWLINE && !next_token(ls));
+	while (ls->ctok->type != NEWLINE && !next_token(ucpp_context, ls));
 define_error:
 	if (m) del_macro(m);
 	if (mname) freemem(mname);
@@ -711,7 +705,7 @@ define_error:
  *
  * Void arguments are allowed in C99.
  */
-static int collect_arguments(struct lexer_state *ls, struct token_fifo *tfi,
+static int collect_arguments(ucpp_context_t *ucpp_context, struct lexer_state *ls, struct token_fifo *tfi,
 	int penury, struct token_fifo *atl, int narg, int vaarg, int *wr)
 {
 	int ltwws = 1, npar = 0, i;
@@ -719,9 +713,9 @@ static int collect_arguments(struct lexer_state *ls, struct token_fifo *tfi,
 	int read_from_fifo = 0;
 	long begin_line = ls->line;
 
-#define unravel(ls)	(read_from_fifo = 0, !((tfi && tfi->art < tfi->nt \
+#define unravel(ucpp_context, ls)	(read_from_fifo = 0, !((tfi && tfi->art < tfi->nt \
 	&& (read_from_fifo = 1) != 0 && (ct = tfi->t + (tfi->art ++))) \
-	|| ((!tfi || penury) && !next_token(ls) && (ct = (ls)->ctok))))
+	|| ((!tfi || penury) && !next_token(ucpp_context, ls) && (ct = (ls)->ctok))))
 
 	/*
 	 * collect_arguments() is assumed to setup correctly atl
@@ -730,7 +724,7 @@ static int collect_arguments(struct lexer_state *ls, struct token_fifo *tfi,
 	for (i = 0; i < narg; i ++) atl[i].art = atl[i].nt = 0;
 	if (vaarg) atl[narg].art = atl[narg].nt = 0;
 	*wr = 0;
-	while (!unravel(ls)) {
+	while (!unravel(ucpp_context, ls)) {
 		if (!read_from_fifo && ct->type == NEWLINE) ls->ltwnl = 1;
 		if (ttWHI(ct->type)) {
 			*wr = 1;
@@ -749,14 +743,14 @@ static int collect_arguments(struct lexer_state *ls, struct token_fifo *tfi,
 	if (!read_from_fifo && ct == ls->ctok) ls->ltwnl = 0;
 	i = 0;
 	if ((narg + vaarg) == 0) {
-		while(!unravel(ls)) {
+		while(!unravel(ucpp_context, ls)) {
 			if (ttWHI(ct->type)) continue;
 			if (ct->type == RPAR) goto harvested;
 			npar = 1;
 			goto too_many_args;
 		}
 	}
-	while (!unravel(ls)) {
+	while (!unravel(ucpp_context, ls)) {
 		struct token t;
 
 		if (ct->type == LPAR) npar ++;
@@ -771,7 +765,7 @@ static int collect_arguments(struct lexer_state *ls, struct token_fifo *tfi,
 			 * this behaviour, change 'narg + vaarg' to 'narg'.
 			 */
 			if (i < (narg + vaarg)) {
-				error(begin_line, "not enough arguments "
+				error(ucpp_context, begin_line, "not enough arguments "
 					"to macro");
 				return 4;
 			}
@@ -828,18 +822,18 @@ static int collect_arguments(struct lexer_state *ls, struct token_fifo *tfi,
 		}
 		aol(atl[i].t, atl[i].nt, t, TOKEN_LIST_MEMG);
 	}
-	error(begin_line, "unfinished macro call");
+	error(ucpp_context, begin_line, "unfinished macro call");
 	return 4;
 too_many_args:
-	error(begin_line, "too many arguments to macro");
-	while (npar && !unravel(ls)) {
+	error(ucpp_context, begin_line, "too many arguments to macro");
+	while (npar && !unravel(ucpp_context, ls)) {
 		if (ct->type == LPAR) npar ++;
 		else if (ct->type == RPAR) npar --;
 	}
 	return 4;
 harvested:
 	if (i > 127 && (ls->flags & WARN_STANDARD))
-		warning(begin_line, "macro call with %d arguments (ISO "
+		warning(ucpp_context, begin_line, "macro call with %d arguments (ISO "
 			"specifies 127 max)", i);
 	return 0;
 #undef unravel
@@ -855,7 +849,7 @@ harvested:
  */
 struct lexer_state dsharp_lexer;
 
-static inline int concat_token(struct token *t1, struct token *t2)
+static inline int concat_token(ucpp_context_t *ucpp_context, struct token *t1, struct token *t2)
 {
 	char *n1 = token_name(t1), *n2 = token_name(t2);
 	size_t l1 = strlen(n1), l2 = strlen(n2);
@@ -872,7 +866,7 @@ static inline int concat_token(struct token *t1, struct token *t2)
 	dsharp_lexer.discard = 1;
 	dsharp_lexer.flags = DEFAULT_LEXER_FLAGS;
 	dsharp_lexer.pending_token = 0;
-	r = next_token(&dsharp_lexer);
+	r = next_token(ucpp_context, &dsharp_lexer);
 	freemem(x);
 	return (r == 1 || dsharp_lexer.pbuf < (l1 + l2)
 		|| dsharp_lexer.pending_token
@@ -887,7 +881,7 @@ static inline int concat_token(struct token *t1, struct token *t2)
  */
 struct lexer_state tokenize_lexer;
 
-static char *tokenize_string(struct lexer_state *ls, char *buf)
+static char *tokenize_string(ucpp_context_t *ucpp_context, struct lexer_state *ls, char *buf)
 {
 	struct token_fifo tf;
 	size_t bl = strlen(buf);
@@ -901,7 +895,7 @@ static char *tokenize_string(struct lexer_state *ls, char *buf)
 	tokenize_lexer.flags = ls->flags | LEXER;
 	tokenize_lexer.pending_token = 0;
 	tf.art = tf.nt = 0;
-	while (!(r = next_token(&tokenize_lexer))) {
+	while (!(r = next_token(ucpp_context, &tokenize_lexer))) {
 		struct token t, *ct = tokenize_lexer.ctok;
 
 		if (ttWHI(ct->type)) continue;
@@ -1024,7 +1018,7 @@ char compile_time[12], compile_date[24];
  * take some tokens from ls to complete a call (fetch arguments) if
  * and only if penury is non zero.
  */
-int substitute_macro(struct lexer_state *ls, struct macro *m,
+int substitute_macro(ucpp_context_t *ucpp_context, struct lexer_state *ls, struct macro *m,
 	struct token_fifo *tfi, int penury, int reject_nested, long l)
 {
 	char *mname = HASH_ITEM_NAME(m);
@@ -1042,14 +1036,14 @@ int substitute_macro(struct lexer_state *ls, struct macro *m,
 		t.type = NAME;
 		t.line = ls->line;
 		t.name = mname;
-		print_token(ls, &t, 0);
+		print_token(ucpp_context, ls, &t, 0);
 		return 0;
 	}
 
 	/*
 	 * put a separation from preceeding tokens
 	 */
-	print_space(ls);
+	print_space(ucpp_context, ls);
 
 	/*
 	 * Check if the macro is a special one.
@@ -1064,14 +1058,14 @@ int substitute_macro(struct lexer_state *ls, struct macro *m,
 			t.line = l;
 			sprintf(buf, "%ld", l);
 			t.name = buf;
-			print_space(ls);
-			print_token(ls, &t, 0);
+			print_space(ucpp_context, ls);
+			print_token(ucpp_context, ls, &t, 0);
 			break;
 		case MAC_FILE:
 			t.type = STRING;
 			t.line = l;
-			cfn = current_long_filename ?
-				current_long_filename : current_filename;
+			cfn = current_long_filename(ucpp_context) ?
+				current_long_filename(ucpp_context) : current_filename(ucpp_context);
 			bbuf = getmem(2 * strlen(cfn) + 3);
 			{
 				char *c, *d;
@@ -1090,30 +1084,30 @@ int substitute_macro(struct lexer_state *ls, struct macro *m,
 				*(d ++) = 0;
 			}
 			t.name = bbuf;
-			print_space(ls);
-			print_token(ls, &t, 0);
+			print_space(ucpp_context, ls);
+			print_token(ucpp_context, ls, &t, 0);
 			freemem(bbuf);
 			break;
 		case MAC_DATE:
 			t.type = STRING;
 			t.line = l;
 			t.name = compile_date;
-			print_space(ls);
-			print_token(ls, &t, 0);
+			print_space(ucpp_context, ls);
+			print_token(ucpp_context, ls, &t, 0);
 			break;
 		case MAC_TIME:
 			t.type = STRING;
 			t.line = l;
 			t.name = compile_time;
-			print_space(ls);
-			print_token(ls, &t, 0);
+			print_space(ucpp_context, ls);
+			print_token(ucpp_context, ls, &t, 0);
 			break;
 		case MAC_STDC:
 			t.type = NUMBER;
 			t.line = l;
 			t.name = "1";
-			print_space(ls);
-			print_token(ls, &t, 0);
+			print_space(ucpp_context, ls);
+			print_token(ucpp_context, ls, &t, 0);
 			break;
 		case MAC_PRAGMA:
 			if (reject_nested > 0) {
@@ -1121,7 +1115,7 @@ int substitute_macro(struct lexer_state *ls, struct macro *m,
 				t.type = NAME;
 				t.line = ls->line;
 				t.name = mname;
-				print_token(ls, &t, 0);
+				print_token(ucpp_context, ls, &t, 0);
 				return 0;
 			}
 			pragma_op = 1;
@@ -1146,7 +1140,7 @@ collect_args:
 		if (m->narg > 0 || m->vaarg)
 			atl = getmem((m->narg + m->vaarg)
 				* sizeof(struct token_fifo));
-		switch (collect_arguments(ls, tfi, penury, atl,
+		switch (collect_arguments(ucpp_context, ls, tfi, penury, atl,
 			m->narg, m->vaarg, &wr)) {
 		case 1:
 			/* the macro expected arguments, but we did not
@@ -1163,14 +1157,14 @@ collect_args:
 			t.type = NAME;
 			t.line = l;
 			t.name = mname;
-			print_token_nailed(ls, &t, l);
+			print_token_nailed(ucpp_context, ls, &t, l);
 			if (wr) {
 				t.type = NONE;
 				t.line = l;
 #ifdef SEMPER_FIDELIS
 				t.name = " ";
 #endif
-				print_token(ls, &t, 0);
+				print_token(ucpp_context, ls, &t, 0);
 				goto exit_macro_2;
 			}
 			goto exit_macro_1;
@@ -1190,7 +1184,7 @@ collect_args:
 		char *pn;
 
 		if (atl[0].nt != 1 || atl[0].t[0].type != STRING) {
-			error(ls->line, "invalid argument to _Pragma");
+			error(ucpp_context, ls->line, "invalid argument to _Pragma");
 			if (atl[0].nt) freemem(atl[0].t);
 			freemem(atl);
 			goto exit_error;
@@ -1213,21 +1207,21 @@ collect_args:
 	 */
 			char *c = atl[0].t[0].name, *d;
 
-			for (d = "\n#pragma "; *d; d ++) put_char(ls, *d);
+			for (d = "\n#pragma "; *d; d ++) put_char(ucpp_context, ls, *d);
 			d = (*c == 'L') ? c + 2 : c + 1;
 			for (; *d != '"'; d ++) {
 				if (*d == '\\' && (*(d + 1) == '\\'
 					|| *(d + 1) == '"')) {
 					d ++;
 				}
-				put_char(ls, *d);
+				put_char(ucpp_context, ls, *d);
 			}
-			put_char(ls, '\n');
+			put_char(ucpp_context, ls, '\n');
 			ls->oline = ls->line;
-			enter_file(ls, ls->flags);
+			enter_file(ucpp_context, ls, ls->flags);
 #else
 			if (ls->flags & WARN_PRAGMA)
-				warning(ls->line,
+				warning(ucpp_context, ls->line,
 					"_Pragma() ignored and not dumped");
 #endif
 		} else if (ls->flags & HANDLE_PRAGMA) {
@@ -1247,7 +1241,7 @@ collect_args:
 			t.type = PRAGMA;
 			t.line = ls->line;
 #ifdef PRAGMA_TOKENIZE
-			t.name = tokenize_string(ls, buf);
+			t.name = tokenize_string(ucpp_context, ls, buf);
 			freemem(buf);
 			buf = t.name;
 			if (!buf) {
@@ -1284,7 +1278,7 @@ collect_args:
 
 #define ZAP_LINE(t)	do { \
 		if ((t).type == NAME) { \
-			struct macro *zlm = HTT_get(&macros, (t).name); \
+			struct macro *zlm = HTT_get(ucpp_context, &ucpp_context->macros, (t).name); \
 			if (zlm && zlm->nest > reject_nested) \
 				(t).line = -1 - (t).line; \
 		} \
@@ -1367,9 +1361,9 @@ collect_args:
 #endif
 			z = ct->line;	/* the argument number is there */
 			if (ltwds && atl[z].nt != 0 && etl.nt) {
-				if (concat_token(etl.t + (-- etl.nt),
+				if (concat_token(ucpp_context, etl.t + (-- etl.nt),
 					atl[z].t)) {
-					warning(ls->line, "operator '##' "
+					warning(ucpp_context, ls->line, "operator '##' "
 						"produced the invalid token "
 						"'%s%s'",
 						token_name(etl.t + etl.nt),
@@ -1444,11 +1438,11 @@ collect_args:
 					cct = atl[z].t + (atl[z].art ++);
 					if (cct->type == NAME
 						&& cct->line >= 0
-						&& (nm = HTT_get(&macros,
+						&& (nm = HTT_get(ucpp_context, &ucpp_context->macros,
 						    cct->name))
 						&& nm->nest <=
 						    (reject_nested + 1)) {
-						ret |= substitute_macro(ls,
+						ret |= substitute_macro(ucpp_context, ls,
 							nm, atl + z, 0,
 							reject_nested + 1, l);
 						continue;
@@ -1490,7 +1484,7 @@ collect_args:
 		 */
 		if (ct->type == DSHARP || ct->type == DIG_DSHARP) {
 			if (ltwds) {
-				error(ls->line, "quad sharp");
+				error(ucpp_context, ls->line, "quad sharp");
 #ifdef LOW_MEM
 				m->cval.rp = save_art;
 #else
@@ -1510,8 +1504,8 @@ collect_args:
 			ltwds = 1;
 			continue;
 		} else if (ltwds && etl.nt != 0) {
-			if (concat_token(etl.t + (-- etl.nt), ct)) {
-				warning(ls->line, "operator '##' produced "
+			if (concat_token(ucpp_context, etl.t + (-- etl.nt), ct)) {
+				warning(ucpp_context, ls->line, "operator '##' produced "
 					"the invalid token '%s%s'",
 					token_name(etl.t + etl.nt),
 					token_name(ct));
@@ -1615,8 +1609,8 @@ collect_args:
 
 		ct = etl.t + (etl.art ++);
 		if (ct->type == NAME && ct->line >= 0
-			&& (nm = HTT_get(&macros, ct->name))) {
-			if (substitute_macro(ls, nm, &etl,
+			&& (nm = HTT_get(ucpp_context, &ucpp_context->macros, ct->name))) {
+			if (substitute_macro(ucpp_context, ls, nm, &etl,
 				penury, reject_nested, l)) {
 				m->nest = save_nest;
 				goto exit_error_2;
@@ -1633,7 +1627,7 @@ collect_args:
 			else ltwws = 2;
 		} else ltwws = 0;
 		if (ct->line >= 0) ct->line = l;
-		print_token(ls, ct, reject_nested ? 0 : l);
+		print_token(ucpp_context, ls, ct, reject_nested ? 0 : l);
 	}
 	if (etl.nt) freemem(etl.t);
 	if (tfi) {
@@ -1641,7 +1635,7 @@ collect_args:
 	}
 
 exit_macro_1:
-	print_space(ls);
+	print_space(ucpp_context, ls);
 exit_macro_2:
 	for (i = 0; i < (m->narg + m->vaarg); i ++)
 		if (atl[i].nt) freemem(atl[i].t);
@@ -1663,9 +1657,9 @@ exit_error:
 /*
  * print already defined macros
  */
-void print_defines(void)
+void print_defines(ucpp_context_t *ucpp_context)
 {
-	HTT_scan(&macros, print_macro);
+	HTT_scan(&ucpp_context->macros, print_macro);
 }
 
 /*
@@ -1675,7 +1669,7 @@ void print_defines(void)
  *
  * It returns non-zero on error.
  */
-int define_macro(struct lexer_state *ls, char *def)
+int define_macro(ucpp_context_t *ucpp_context, struct lexer_state *ls, char *def)
 {
 	char *c = sdup(def), *d;
 	int with_def = 0;
@@ -1691,7 +1685,7 @@ int define_macro(struct lexer_state *ls, char *def)
 		size_t n = strlen(c) + 1;
 
 		if (c == d) {
-			error(-1, "void macro name");
+			error(ucpp_context, -1, "void macro name");
 			ret = 1;
 		} else {
 			*(c + n - 1) = '\n';
@@ -1702,16 +1696,16 @@ int define_macro(struct lexer_state *ls, char *def)
 			lls.pbuf = 0;
 			lls.ebuf = n;
 			lls.line = -1;
-			ret = handle_define(&lls);
+			ret = handle_define(ucpp_context, &lls);
 			free_lexer_state(&lls);
 		}
 	} else {
 		struct macro *m;
 
 		if (!*c) {
-			error(-1, "void macro name");
+			error(ucpp_context, -1, "void macro name");
 			ret = 1;
-		} else if ((m = HTT_get(&macros, c))
+		} else if ((m = HTT_get(ucpp_context, &ucpp_context->macros, c))
 #ifdef LOW_MEM
 			&& (m->cval.length != 3
 			|| m->cval.t[0] != NUMBER
@@ -1721,7 +1715,7 @@ int define_macro(struct lexer_state *ls, char *def)
 			|| m->val.t[0].type != NUMBER
 			|| strcmp(m->val.t[0].name, "1"))) {
 #endif
-			error(-1, "macro %s already defined", c);
+			error(ucpp_context, -1, "macro %s already defined", c);
 			ret = 1;
 		} else {
 #ifndef LOW_MEM
@@ -1740,7 +1734,7 @@ int define_macro(struct lexer_state *ls, char *def)
 			t.name = sdup("1");
 			aol(m->val.t, m->val.nt, t, TOKEN_LIST_MEMG);
 #endif
-			HTT_put(&macros, m, c);
+			HTT_put(ucpp_context, &ucpp_context->macros, m, c);
 		}
 	}
 	freemem(c);
@@ -1754,19 +1748,19 @@ int define_macro(struct lexer_state *ls, char *def)
  * It returns non-zero on error (undefinition of a special macro,
  * void macro name).
  */
-int undef_macro(struct lexer_state *ls, char *def)
+int undef_macro(ucpp_context_t *ucpp_context, struct lexer_state *ls, char *def)
 {
 	char *c = def;
 
 	if (!*c) {
-		error(-1, "void macro name");
+		error(ucpp_context, -1, "void macro name");
 		return 1;
 	}
-	if (HTT_get(&macros, c)) {
+	if (HTT_get(ucpp_context, &ucpp_context->macros, c)) {
 		if (check_special_macro(c)) {
-			error(-1, "trying to undef special macro %s", c);
+			error(ucpp_context, -1, "trying to undef special macro %s", c);
 			return 1;
-		} else HTT_del(&macros, c);
+		} else HTT_del(ucpp_context, &ucpp_context->macros, c);
 	}
 	return 0;
 }
@@ -1775,35 +1769,35 @@ int undef_macro(struct lexer_state *ls, char *def)
  * We saw a #ifdef directive. Parse the line.
  * return value: 1 if the macro is defined, 0 if it is not, -1 on error
  */
-int handle_ifdef(struct lexer_state *ls)
+int handle_ifdef(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
-	while (!next_token(ls)) {
+	while (!next_token(ucpp_context, ls)) {
 		int tgd = 1;
 
 		if (ls->ctok->type == NEWLINE) break;
 		if (ttMWS(ls->ctok->type)) continue;
 		if (ls->ctok->type == NAME) {
-			int x = (HTT_get(&macros, ls->ctok->name) != 0);
-			while (!next_token(ls) && ls->ctok->type != NEWLINE)
+			int x = (HTT_get(ucpp_context, &ucpp_context->macros, ls->ctok->name) != 0);
+			while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE)
 				if (tgd && !ttWHI(ls->ctok->type)
 					&& (ls->flags & WARN_STANDARD)) {
-					warning(ls->line, "trailing garbage "
+					warning(ucpp_context, ls->line, "trailing garbage "
 						"in #ifdef");
 					tgd = 0;
 				}
 			return x;
 		}
-		error(ls->line, "illegal macro name for #ifdef");
-		while (!next_token(ls) && ls->ctok->type != NEWLINE)
+		error(ucpp_context, ls->line, "illegal macro name for #ifdef");
+		while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE)
 			if (tgd && !ttWHI(ls->ctok->type)
 				&& (ls->flags & WARN_STANDARD)) {
-				warning(ls->line, "trailing garbage in "
+				warning(ucpp_context, ls->line, "trailing garbage in "
 					"#ifdef");
 				tgd = 0;
 			}
 		return -1;
 	}
-	error(ls->line, "unfinished #ifdef");
+	error(ucpp_context, ls->line, "unfinished #ifdef");
 	return -1;
 }
 
@@ -1812,18 +1806,18 @@ int handle_ifdef(struct lexer_state *ls)
  * return value: 1 on error, 0 on success. Undefining a macro that was
  * already not defined is not an error.
  */
-int handle_undef(struct lexer_state *ls)
+int handle_undef(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
-	while (!next_token(ls)) {
+	while (!next_token(ucpp_context, ls)) {
 		if (ls->ctok->type == NEWLINE) break;
 		if (ttMWS(ls->ctok->type)) continue;
 		if (ls->ctok->type == NAME) {
-			struct macro *m = HTT_get(&macros, ls->ctok->name);
+			struct macro *m = HTT_get(ucpp_context, &ucpp_context->macros, ls->ctok->name);
 			int tgd = 1;
 
 			if (m != 0) {
 				if (check_special_macro(ls->ctok->name)) {
-					error(ls->line, "trying to undef "
+					error(ucpp_context, ls->line, "trying to undef "
 						"special macro %s",
 						ls->ctok->name);
 					goto undef_error;
@@ -1831,23 +1825,23 @@ int handle_undef(struct lexer_state *ls)
 				if (emit_defines)
 					fprintf(emit_output, "#undef %s\n",
 						ls->ctok->name);
-				HTT_del(&macros, ls->ctok->name);
+				HTT_del(ucpp_context, &ucpp_context->macros, ls->ctok->name);
 			}
-			while (!next_token(ls) && ls->ctok->type != NEWLINE)
+			while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE)
 				if (tgd && !ttWHI(ls->ctok->type)
 					&& (ls->flags & WARN_STANDARD)) {
-					warning(ls->line, "trailing garbage "
+					warning(ucpp_context, ls->line, "trailing garbage "
 						"in #undef");
 					tgd = 0;
 				}
 			return 0;
 		}
-		error(ls->line, "illegal macro name for #undef");
+		error(ucpp_context, ls->line, "illegal macro name for #undef");
 	undef_error:
-		while (!next_token(ls) && ls->ctok->type != NEWLINE);
+		while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE);
 		return 1;
 	}
-	error(ls->line, "unfinished #undef");
+	error(ucpp_context, ls->line, "unfinished #undef");
 	return 1;
 }
 
@@ -1855,67 +1849,67 @@ int handle_undef(struct lexer_state *ls)
  * for #ifndef
  * return value: 0 if the macro is defined, 1 if it is not, -1 on error.
  */
-int handle_ifndef(struct lexer_state *ls)
+int handle_ifndef(ucpp_context_t *ucpp_context, struct lexer_state *ls)
 {
-	while (!next_token(ls)) {
+	while (!next_token(ucpp_context, ls)) {
 		int tgd = 1;
 
 		if (ls->ctok->type == NEWLINE) break;
 		if (ttMWS(ls->ctok->type)) continue;
 		if (ls->ctok->type == NAME) {
-			int x = (HTT_get(&macros, ls->ctok->name) == 0);
+			int x = (HTT_get(ucpp_context, &ucpp_context->macros, ls->ctok->name) == 0);
 
-			while (!next_token(ls) && ls->ctok->type != NEWLINE)
+			while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE)
 				if (tgd && !ttWHI(ls->ctok->type)
 					&& (ls->flags & WARN_STANDARD)) {
-					warning(ls->line, "trailing garbage "
+					warning(ucpp_context, ls->line, "trailing garbage "
 						"in #ifndef");
 					tgd = 0;
 				}
-			if (protect_detect.state == 1) {
-				protect_detect.state = 2;
-				protect_detect.macro = sdup(ls->ctok->name);
+			if (ucpp_context->protect_detect.state == 1) {
+				ucpp_context->protect_detect.state = 2;
+				ucpp_context->protect_detect.macro = sdup(ls->ctok->name);
 			}
 			return x;
 		}
-		error(ls->line, "illegal macro name for #ifndef");
-		while (!next_token(ls) && ls->ctok->type != NEWLINE)
+		error(ucpp_context, ls->line, "illegal macro name for #ifndef");
+		while (!next_token(ucpp_context, ls) && ls->ctok->type != NEWLINE)
 			if (tgd && !ttWHI(ls->ctok->type)
 				&& (ls->flags & WARN_STANDARD)) {
-				warning(ls->line, "trailing garbage in "
+				warning(ucpp_context, ls->line, "trailing garbage in "
 					"#ifndef");
 				tgd = 0;
 			}
 		return -1;
 	}
-	error(ls->line, "unfinished #ifndef");
+	error(ucpp_context, ls->line, "unfinished #ifndef");
 	return -1;
 }
 
 /*
  * erase the macro table.
  */
-void wipe_macros(void)
+void wipe_macros(ucpp_context_t *ucpp_context)
 {
-	if (macros_init_done) HTT_kill(&macros);
-	macros_init_done = 0;
+	if (ucpp_context->macros_init_done) HTT_kill(ucpp_context, &ucpp_context->macros);
+	ucpp_context->macros_init_done = 0;
 }
 
 /*
  * initialize the macro table
  */
-void init_macros(void)
+void init_macros(ucpp_context_t *ucpp_context)
 {
-	wipe_macros();
-	HTT_init(&macros, del_macro);
-	macros_init_done = 1;
-	if (!no_special_macros) add_special_macros();
+	wipe_macros(ucpp_context);
+	HTT_init(&ucpp_context->macros, del_macro);
+	ucpp_context->macros_init_done = 1;
+	if (!no_special_macros) add_special_macros(ucpp_context);
 }
 
 /*
  * find a macro from its name
  */
-struct macro *get_macro(char *name)
+struct macro *get_macro(ucpp_context_t *ucpp_context, char *name)
 {
-	return HTT_get(&macros, name);
+	return HTT_get(ucpp_context, &ucpp_context->macros, name);
 }

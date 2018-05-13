@@ -259,9 +259,9 @@ ARITH_DECL_BI_UI_U(lsh)
 {
 #ifdef ARITHMETIC_CHECKS
 	if (y >= NATIVE_UNSIGNED_BITS)
-		ARITH_WARNING(ARITH_EXCEP_LSH_W);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_W);
 	else if (y < 0)
-		ARITH_WARNING(ARITH_EXCEP_LSH_C);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_C);
 #endif
 	return x << y;
 }
@@ -270,22 +270,22 @@ ARITH_DECL_BI_UI_U(rsh)
 {
 #ifdef ARITHMETIC_CHECKS
 	if (y >= NATIVE_UNSIGNED_BITS)
-		ARITH_WARNING(ARITH_EXCEP_RSH_W);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_W);
 	else if (y < 0)
-		ARITH_WARNING(ARITH_EXCEP_RSH_C);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_C);
 #endif
 	return x >> y;
 }
 
 ARITH_DECL_BI_UU_U(slash)
 {
-	if (y == 0) ARITH_ERROR(ARITH_EXCEP_SLASH_D);
+	if (y == 0) ARITH_ERROR(ucpp_context, ARITH_EXCEP_SLASH_D);
 	return x / y;
 }
 
 ARITH_DECL_BI_UU_U(pct)
 {
-	if (y == 0) ARITH_ERROR(ARITH_EXCEP_PCT_D);
+	if (y == 0) ARITH_ERROR(ucpp_context, ARITH_EXCEP_PCT_D);
 	return x % y;
 }
 
@@ -296,7 +296,7 @@ ARITH_DECL_MONO_U_S(to_s)
 #ifdef ARITHMETIC_CHECKS
 #if !SIGNED_IS_BIGGER
 	if (x > (arith_u)NATIVE_SIGNED_MAX)
-		ARITH_WARNING(ARITH_EXCEP_CONV_O);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_CONV_O);
 #endif
 #endif
 	return (arith_s)x;
@@ -332,7 +332,7 @@ ARITH_DECL_MONO_S_S(neg)
 #ifdef ARITHMETIC_CHECKS
 #if NEGATIVE_IS_BIGGER
 	if (x == NATIVE_SIGNED_MIN)
-		ARITH_WARNING(ARITH_EXCEP_NEG_O);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_NEG_O);
 #endif
 #endif
 	return -x;
@@ -350,7 +350,7 @@ ARITH_DECL_MONO_S_S(not)
 #else
 		(x == NATIVE_SIGNED_MAX)
 #endif
-		) ARITH_WARNING(ARITH_EXCEP_NOT_T);
+		) ARITH_WARNING(ucpp_context, ARITH_EXCEP_NOT_T);
 #endif
 #endif
 	return ~x;
@@ -391,7 +391,7 @@ ARITH_DECL_BI_SS_S(plus)
 #else
 		(((arith_u)x + (arith_u)y) > (arith_u)NATIVE_SIGNED_MAX)
 #endif
-		)) ARITH_WARNING(ARITH_EXCEP_PLUS_O);
+		)) ARITH_WARNING(ucpp_context, ARITH_EXCEP_PLUS_O);
 	else if (x < 0 && y < 0 && (
 #if NEGATIVE_IS_BIGGER
 		(x == NATIVE_SIGNED_MIN || y == NATIVE_SIGNED_MIN) ||
@@ -411,7 +411,7 @@ ARITH_DECL_BI_SS_S(plus)
 			> (arith_u)NATIVE_SIGNED_MAX)
 #endif
 #endif
-		)) ARITH_WARNING(ARITH_EXCEP_PLUS_U);
+		)) ARITH_WARNING(ucpp_context, ARITH_EXCEP_PLUS_U);
 #endif
 	return x + y;
 }
@@ -443,7 +443,7 @@ ARITH_DECL_BI_SS_S(minus)
 #else
 	(((arith_u)x + (arith_u)(-y)) > (arith_u)NATIVE_SIGNED_MAX)
 #endif
-	)) ARITH_WARNING(ARITH_EXCEP_MINUS_O);
+	)) ARITH_WARNING(ucpp_context, ARITH_EXCEP_MINUS_O);
 	else if (x < 0 && y > 0 && (
 #if NEGATIVE_IS_BIGGER
 	(x == NATIVE_SIGNED_MIN) ||
@@ -461,7 +461,7 @@ ARITH_DECL_BI_SS_S(minus)
 	(((arith_u)(-x) + (arith_u)y) > (arith_u)NATIVE_SIGNED_MAX)
 #endif
 #endif
-	)) ARITH_WARNING(ARITH_EXCEP_MINUS_U);
+	)) ARITH_WARNING(ucpp_context, ARITH_EXCEP_MINUS_U);
 #endif
 	return x - y;
 }
@@ -486,7 +486,7 @@ ARITH_DECL_BI_SS_S(and)
 #ifdef ARITHMETIC_CHECKS
 #if TRAP_REPRESENTATION && !ONES_COMPLEMENT
 	if (x < 0 && y < 0 && ((-x) & (-y)) == 0)
-		ARITH_WARNING(ARITH_EXCEP_AND_T);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_AND_T);
 #endif
 #endif
 	return x & y;
@@ -510,7 +510,7 @@ ARITH_DECL_BI_SS_S(xor)
 #else
 	(x != 0 && -x == y)
 #endif
-		) ARITH_WARNING(ARITH_EXCEP_XOR_T);
+		) ARITH_WARNING(ucpp_context, ARITH_EXCEP_XOR_T);
 #endif
 #endif
 	return x ^ y;
@@ -528,7 +528,7 @@ ARITH_DECL_BI_SS_S(or)
 #if TRAP_REPRESENTATION
 #if ONES_COMPLEMENT
 	if (x != 0 && y != 0 && (~x & ~y) == 0)
-		ARITH_WARNING(ARITH_EXCEP_OR_T);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_OR_T);
 #endif
 #endif
 #endif
@@ -549,7 +549,7 @@ ARITH_DECL_BI_SS_S(or)
 ARITH_DECL_BI_SI_S(lsh)
 {
 #ifdef ARITHMETIC_CHECKS
-	if (y < 0) ARITH_WARNING(ARITH_EXCEP_LSH_C);
+	if (y < 0) ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_C);
 	else if (
 #if SIGNED_IS_BIGGER
 		y > NATIVE_UNSIGNED_BITS
@@ -558,10 +558,10 @@ ARITH_DECL_BI_SI_S(lsh)
 		|| (y > 0 && (((arith_u)1 << (y - 1))
 			> (arith_u)NATIVE_SIGNED_MAX))
 #endif
-		) ARITH_WARNING(ARITH_EXCEP_LSH_W);
-	else if (x < 0) ARITH_WARNING(ARITH_EXCEP_LSH_U);
+		) ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_W);
+	else if (x < 0) ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_U);
 	else if (x > 0 && ((((arith_u)x << y) & NATIVE_SIGNED_MAX) >> y)
-		!= (arith_u)x) ARITH_WARNING(ARITH_EXCEP_LSH_O);
+		!= (arith_u)x) ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_O);
 #endif
 	return x << y;
 }
@@ -575,7 +575,7 @@ ARITH_DECL_BI_SI_S(lsh)
 ARITH_DECL_BI_SI_S(rsh)
 {
 #ifdef ARITHMETIC_CHECKS
-	if (y < 0) ARITH_WARNING(ARITH_EXCEP_RSH_C);
+	if (y < 0) ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_C);
 	else if (
 #if SIGNED_IS_BIGGER
 		y > NATIVE_UNSIGNED_BITS
@@ -584,8 +584,8 @@ ARITH_DECL_BI_SI_S(rsh)
 		|| (y > 0 && (((arith_u)1 << (y - 1))
 			> (arith_u)NATIVE_SIGNED_MAX))
 #endif
-		) ARITH_WARNING(ARITH_EXCEP_RSH_W);
-	else if (x < 0) ARITH_WARNING(ARITH_EXCEP_RSH_N);
+		) ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_W);
+	else if (x < 0) ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_N);
 #endif
 	return x >> y;
 }
@@ -604,7 +604,7 @@ ARITH_DECL_BI_SS_S(star)
 	if (x > 0 && y > 0) {
 		if ((((arith_u)x * (arith_u)y) & (arith_u)NATIVE_SIGNED_MAX)
 			/ (arith_u)y != (arith_u)x)
-			ARITH_WARNING(ARITH_EXCEP_STAR_O);
+			ARITH_WARNING(ucpp_context, ARITH_EXCEP_STAR_O);
 	} else if (x < 0 && y < 0) {
 		if (
 #if NEGATIVE_IS_BIGGER
@@ -613,7 +613,7 @@ ARITH_DECL_BI_SS_S(star)
 			(((arith_u)(-x) * (arith_u)(-y))
 			& (arith_u)NATIVE_SIGNED_MAX) / (arith_u)(-y)
 			!= (arith_u)(-x))
-			ARITH_WARNING(ARITH_EXCEP_STAR_O);
+			ARITH_WARNING(ucpp_context, ARITH_EXCEP_STAR_O);
 	} else if (x > 0 && y < 0) {
 		if ((arith_u)x > (arith_u)1 && (
 #if NEGATIVE_IS_BIGGER
@@ -621,7 +621,7 @@ ARITH_DECL_BI_SS_S(star)
 #endif
 		(((arith_u)x * (arith_u)(-y)) & (arith_u)NATIVE_SIGNED_MAX)
 		/ (arith_u)(-y) != (arith_u)x))
-		ARITH_WARNING(ARITH_EXCEP_STAR_U);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_STAR_U);
 	} else {
 		if ((arith_u)y > (arith_u)1 && (
 #if NEGATIVE_IS_BIGGER
@@ -629,7 +629,7 @@ ARITH_DECL_BI_SS_S(star)
 #endif
 		(((arith_u)y * (arith_u)(-x)) & (arith_u)NATIVE_SIGNED_MAX)
 		/ (arith_u)(-x) != (arith_u)y))
-		ARITH_WARNING(ARITH_EXCEP_STAR_U);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_STAR_U);
 	}
 #endif
 	return x * y;
@@ -646,10 +646,10 @@ ARITH_DECL_BI_SS_S(star)
  */
 ARITH_DECL_BI_SS_S(slash)
 {
-	if (y == 0) ARITH_ERROR(ARITH_EXCEP_SLASH_D);
+	if (y == 0) ARITH_ERROR(ucpp_context, ARITH_EXCEP_SLASH_D);
 #if NEGATIVE_IS_BIGGER
 	else if (x == NATIVE_SIGNED_MIN && y == (arith_s)(-1))
-		ARITH_ERROR(ARITH_EXCEP_SLASH_O);
+		ARITH_ERROR(ucpp_context, ARITH_EXCEP_SLASH_O);
 #endif
 	return x / y;
 }
@@ -659,7 +659,7 @@ ARITH_DECL_BI_SS_S(slash)
  */
 ARITH_DECL_BI_SS_S(pct)
 {
-	if (y == 0) ARITH_ERROR(ARITH_EXCEP_PCT_D);
+	if (y == 0) ARITH_ERROR(ucpp_context, ARITH_EXCEP_PCT_D);
 	return x % y;
 }
 
@@ -670,13 +670,13 @@ ARITH_DECL_MONO_ST_US(octconst)
 	for (; ARITH_OCTAL(*c); c ++) {
 		arith_u w = ARITH_OVAL(*c);
 		if (z > (NATIVE_UNSIGNED_MAX_A / 8))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 		z *= 8;
 #if 0
 /* obsolete */
 /* NATIVE_UNSIGNED_MAX_A is 2^N - 1, 0 <= w <= 7 and 8 divides z */
 		if (z > (NATIVE_UNSIGNED_MAX_A - w))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 #endif
 		z += w;
 	}
@@ -702,10 +702,10 @@ ARITH_DECL_MONO_ST_US(decconst)
 	for (; ARITH_DECIM(*c); c ++) {
 		arith_u w = ARITH_DVAL(*c);
 		if (z > (NATIVE_UNSIGNED_MAX_A / 10))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 		z *= 10;
 		if (z > (NATIVE_UNSIGNED_MAX_A - w))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 		z += w;
 	}
 	*ru = z;
@@ -730,13 +730,13 @@ ARITH_DECL_MONO_ST_US(hexconst)
 	for (; ARITH_HEXAD(*c); c ++) {
 		arith_u w = ARITH_HVAL(*c);
 		if (z > (NATIVE_UNSIGNED_MAX_A / 16))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 		z *= 16;
 #if 0
 /* obsolete */
 /* NATIVE_UNSIGNED_MAX_A is 2^N - 1, 0 <= w <= 15 and 16 divides z */
 		if (z > (NATIVE_UNSIGNED_MAX_A - w))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 #endif
 		z += w;
 	}
@@ -914,8 +914,8 @@ ARITH_DECL_BI_UI_U(lsh)
 {
 	if (y == 0) return x;
 #ifdef ARITHMETIC_CHECKS
-	if (y < 0) ARITH_WARNING(ARITH_EXCEP_LSH_C);
-	else if (y >= SIMUL_NUMBITS) ARITH_WARNING(ARITH_EXCEP_LSH_W);
+	if (y < 0) ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_C);
+	else if (y >= SIMUL_NUMBITS) ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_W);
 #endif
 	y = (unsigned)y % SIMUL_NUMBITS;
 	if (y >= SIMUL_LSW_WIDTH) {
@@ -935,8 +935,8 @@ ARITH_DECL_BI_UI_U(lsh)
 ARITH_DECL_BI_UI_U(rsh)
 {
 #ifdef ARITHMETIC_CHECKS
-	if (y < 0) ARITH_WARNING(ARITH_EXCEP_RSH_C);
-	else if (y >= SIMUL_NUMBITS) ARITH_WARNING(ARITH_EXCEP_RSH_W);
+	if (y < 0) ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_C);
+	else if (y >= SIMUL_NUMBITS) ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_W);
 #endif
 	y = (unsigned)y % SIMUL_NUMBITS;
 	if (y >= SIMUL_LSW_WIDTH) {
@@ -1085,7 +1085,7 @@ ARITH_DECL_BI_UU_U(slash)
 	arith_u q, r;
 
 	if (arith_op_u(same)(y, SIMUL_ZERO))
-		ARITH_ERROR(ARITH_EXCEP_SLASH_D);
+		ARITH_ERROR(ucpp_context, ARITH_EXCEP_SLASH_D);
 	arith_op_u(udiv)(x, y, &q, &r);
 	return q;
 }
@@ -1095,7 +1095,7 @@ ARITH_DECL_BI_UU_U(pct)
 	arith_u q, r;
 
 	if (arith_op_u(same)(y, SIMUL_ZERO))
-		ARITH_ERROR(ARITH_EXCEP_PCT_D);
+		ARITH_ERROR(ucpp_context, ARITH_EXCEP_PCT_D);
 	arith_op_u(udiv)(x, y, &q, &r);
 	return r;
 }
@@ -1108,7 +1108,7 @@ ARITH_DECL_BI_UU_U(pct)
 ARITH_DECL_MONO_U_S(to_s)
 {
 #ifdef ARITHMETIC_CHECKS
-	if (x.msw & SIMUL_TRAP) ARITH_WARNING(ARITH_EXCEP_CONV_O);
+	if (x.msw & SIMUL_TRAP) ARITH_WARNING(ucpp_context, ARITH_EXCEP_CONV_O);
 #endif
 	return x;
 }
@@ -1138,7 +1138,7 @@ ARITH_DECL_MONO_S_S(neg)
 {
 #ifdef ARITHMETIC_CHECKS
 	if (x.lsw == 0 && x.msw == SIMUL_TRAP)
-		ARITH_WARNING(ARITH_EXCEP_NEG_O);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_NEG_O);
 #endif
 	return arith_op_u(neg)(x);
 }
@@ -1153,9 +1153,9 @@ ARITH_DECL_BI_SS_S(plus)
 
 #ifdef ARITHMETIC_CHECKS
 	if (x.msw & y.msw & ~z.msw & SIMUL_TRAP)
-		ARITH_WARNING(ARITH_EXCEP_PLUS_U);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_PLUS_U);
 	else if (~x.msw & ~y.msw & z.msw & SIMUL_TRAP)
-		ARITH_WARNING(ARITH_EXCEP_PLUS_O);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_PLUS_O);
 #endif
 	return z;
 }
@@ -1166,9 +1166,9 @@ ARITH_DECL_BI_SS_S(minus)
 
 #ifdef ARITHMETIC_CHECKS
 	if (x.msw & ~y.msw & ~z.msw & SIMUL_TRAP)
-		ARITH_WARNING(ARITH_EXCEP_MINUS_U);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_MINUS_U);
 	else if (~x.msw & y.msw & z.msw & SIMUL_TRAP)
-		ARITH_WARNING(ARITH_EXCEP_MINUS_O);
+		ARITH_WARNING(ucpp_context, ARITH_EXCEP_MINUS_O);
 #endif
 	return z;
 }
@@ -1183,7 +1183,7 @@ ARITH_DECL_BI_SI_S(lsh)
 	arith_s z = arith_op_u(lsh)(x, y);
 
 #ifdef ARITHMETIC_CHECKS
-	if (x.msw & SIMUL_TRAP) ARITH_WARNING(ARITH_EXCEP_LSH_U);
+	if (x.msw & SIMUL_TRAP) ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_U);
 	else {
 		/*
 		 * To check for possible overflow, we right shift the
@@ -1195,7 +1195,7 @@ ARITH_DECL_BI_SI_S(lsh)
 		arith_s w = arith_op_u(rsh)(z, (unsigned)y % SIMUL_NUMBITS);
 
 		if ((z.msw & SIMUL_TRAP) || w.msw != x.msw || w.lsw != x.lsw)
-			ARITH_WARNING(ARITH_EXCEP_LSH_O);
+			ARITH_WARNING(ucpp_context, ARITH_EXCEP_LSH_O);
 	}
 #endif
 	return z;
@@ -1213,7 +1213,7 @@ ARITH_DECL_BI_SI_S(rsh)
 	int gy = (unsigned)y % SIMUL_NUMBITS;
 
 #ifdef ARITHMETIC_CHECKS
-	if (xn) ARITH_WARNING(ARITH_EXCEP_RSH_N);
+	if (xn) ARITH_WARNING(ucpp_context, ARITH_EXCEP_RSH_N);
 #endif
 	if (xn && gy > 0) {
 		if (gy <= SIMUL_MSW_WIDTH) {
@@ -1335,7 +1335,7 @@ ARITH_DECL_BI_SS_S(star)
 			&& !arith_op_s(same)(arith_op_s(slash)(z, x), y)) {
 		} warn = 1;
 	}
-	if (warn) ARITH_WARNING(((x.msw ^ y.msw) & SIMUL_TRAP)
+	if (warn) ARITH_WARNING(((ucpp_context, x.msw ^ y.msw) & SIMUL_TRAP)
 		? ARITH_EXCEP_STAR_U : ARITH_EXCEP_STAR_O);
 	return z;
 #else
@@ -1348,10 +1348,10 @@ ARITH_DECL_BI_SS_S(slash)
 	arith_s q, r;
 
 	if (arith_op_s(same)(y, SIMUL_ZERO))
-		ARITH_ERROR(ARITH_EXCEP_SLASH_D);
+		ARITH_ERROR(ucpp_context, ARITH_EXCEP_SLASH_D);
 	else if (x.msw == SIMUL_TRAP && x.lsw == 0
 		&& y.msw == SIMUL_MSW_MASK && y.lsw == SIMUL_LSW_MASK)
-		ARITH_ERROR(ARITH_EXCEP_SLASH_O);
+		ARITH_ERROR(ucpp_context, ARITH_EXCEP_SLASH_O);
 	arith_op_s(sdiv)(x, y, &q, &r);
 	return q;
 }
@@ -1361,7 +1361,7 @@ ARITH_DECL_BI_SS_S(pct)
 	arith_s q, r;
 
 	if (arith_op_s(same)(y, SIMUL_ZERO))
-		ARITH_ERROR(ARITH_EXCEP_PCT_D);
+		ARITH_ERROR(ucpp_context, ARITH_EXCEP_PCT_D);
 	arith_op_s(sdiv)(x, y, &q, &r);
 	return r;
 }
@@ -1373,7 +1373,7 @@ ARITH_DECL_MONO_ST_US(octconst)
 	for (; ARITH_OCTAL(*c); c ++) {
 		unsigned w = ARITH_OVAL(*c);
 		if (z.msw > (SIMUL_MSW_MASK / 8))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 		z = arith_op_u(lsh)(z, 3);
 		z.lsw |= w;
 	}
@@ -1409,7 +1409,7 @@ ARITH_DECL_MONO_ST_US(decconst)
 			z.lsw > ((SIMUL_TRAPL / 5) * ARITH_ALPHA_A
 			+ ((SIMUL_TRAPL % 5) * ARITH_ALPHA_A) / 5)
 #endif
-			)) ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			)) ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 		z = arith_op_u(plus)(arith_op_u(lsh)(z, 3),
 			arith_op_u(lsh)(z, 1));
 		t = TLSW(z.lsw + w);
@@ -1438,7 +1438,7 @@ ARITH_DECL_MONO_ST_US(hexconst)
 	for (; ARITH_HEXAD(*c); c ++) {
 		unsigned w = ARITH_HVAL(*c);
 		if (z.msw > (SIMUL_MSW_MASK / 16))
-			ARITH_ERROR(ARITH_EXCEP_CONST_O);
+			ARITH_ERROR(ucpp_context, ARITH_EXCEP_CONST_O);
 		z = arith_op_u(lsh)(z, 4);
 		z.lsw |= w;
 	}

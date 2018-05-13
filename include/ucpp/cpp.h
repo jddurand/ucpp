@@ -31,6 +31,7 @@
 #define UCPP__CPP__
 
 #include <ucpp/export.h>
+#include <ucpp/context.h>
 #include <ucpp/tune.h>
 #include <stdio.h>
 #include <setjmp.h>
@@ -254,52 +255,54 @@ extern "C" {
 #endif
 
 #ifndef NO_UCPP_BUF
-ucpp_EXPORT void flush_output(struct lexer_state *);
+ucpp_EXPORT void flush_output(ucpp_context_t *ucpp_context, struct lexer_state *);
 #endif
 
-ucpp_EXPORT void init_assertions(void);
-ucpp_EXPORT int make_assertion(char *);
-ucpp_EXPORT int destroy_assertion(char *);
-ucpp_EXPORT void print_assertions(void);
+ucpp_EXPORT void init_assertions(ucpp_context_t *ucpp_context);
+ucpp_EXPORT int make_assertion(ucpp_context_t *ucpp_context, char *);
+ucpp_EXPORT int destroy_assertion(ucpp_context_t *ucpp_context, char *);
+ucpp_EXPORT void print_assertions(ucpp_context_t *ucpp_context);
 
-ucpp_EXPORT void init_macros(void);
-ucpp_EXPORT int define_macro(struct lexer_state *, char *);
-ucpp_EXPORT int undef_macro(struct lexer_state *, char *);
-ucpp_EXPORT void print_defines(void);
+ucpp_EXPORT void init_macros(ucpp_context_t *ucpp_context);
+ucpp_EXPORT int define_macro(ucpp_context_t *ucpp_context, struct lexer_state *, char *);
+ucpp_EXPORT int undef_macro(ucpp_context_t *ucpp_context, struct lexer_state *, char *);
+ucpp_EXPORT void print_defines(ucpp_context_t *ucpp_context);
 
-ucpp_EXPORT void set_init_filename(char *, int);
-ucpp_EXPORT void init_cpp(void);
-ucpp_EXPORT void init_include_path(char *[]);
+ucpp_EXPORT void set_init_filename(ucpp_context_t *ucpp_context, char *, int);
+ucpp_EXPORT ucpp_context_t *init_cpp(void);
+ucpp_EXPORT void close_cpp(ucpp_context_t *ucpp_context);
+ucpp_EXPORT void init_include_path(ucpp_context_t *ucpp_context, char *[]);
 ucpp_EXPORT void init_lexer_state(struct lexer_state *);
 ucpp_EXPORT void init_lexer_mode(struct lexer_state *);
 ucpp_EXPORT void free_lexer_state(struct lexer_state *);
-ucpp_EXPORT void wipeout(void);
-ucpp_EXPORT int lex(struct lexer_state *);
-ucpp_EXPORT int check_cpp_errors(struct lexer_state *);
-ucpp_EXPORT void add_incpath(char *);
-ucpp_EXPORT void init_tables(int);
-ucpp_EXPORT int enter_file(struct lexer_state *, unsigned long);
-ucpp_EXPORT int cpp(struct lexer_state *);
-ucpp_EXPORT void set_identifier_char(int c);
-ucpp_EXPORT void unset_identifier_char(int c);
+ucpp_EXPORT void wipeout(ucpp_context_t *ucpp_context);
+ucpp_EXPORT int lex(ucpp_context_t *ucpp_context, struct lexer_state *);
+ucpp_EXPORT int check_cpp_errors(ucpp_context_t *ucpp_context, struct lexer_state *);
+ucpp_EXPORT void add_incpath(ucpp_context_t *ucpp_context, char *);
+ucpp_EXPORT void init_tables(ucpp_context_t *ucpp_context, int with_assertions);
+ucpp_EXPORT int enter_file(ucpp_context_t *ucpp_context, struct lexer_state *, unsigned long);
+ucpp_EXPORT int cpp(ucpp_context_t *ucpp_context, struct lexer_state *);
+ucpp_EXPORT void set_identifier_char(ucpp_context_t *ucpp_context, int c);
+ucpp_EXPORT void unset_identifier_char(ucpp_context_t *ucpp_context, int c);
 
 #ifdef UCPP_MMAP
-ucpp_EXPORT FILE *fopen_mmap_file(char *);
-ucpp_EXPORT void set_input_file(struct lexer_state *, FILE *);
+ucpp_EXPORT FILE *fopen_mmap_file(ucpp_context *ucpp_context, char *);
+ucpp_EXPORT void set_input_file(ucpp_context *ucpp_context, struct lexer_state *, FILE *);
 #endif
 
-ucpp_EXPORT struct stack_context *report_context(void);
+ucpp_EXPORT struct stack_context *report_context(ucpp_context_t *ucpp_context);
 
 ucpp_EXPORT int no_special_macros, system_macros,
 	emit_dependencies, emit_defines, emit_assertions;
 ucpp_EXPORT int c99_compliant, c99_hosted;
 ucpp_EXPORT FILE *emit_output;
-ucpp_EXPORT char *current_filename, *current_long_filename;
+ucpp_EXPORT char *current_filename(ucpp_context_t *ucpp_context);
+ucpp_EXPORT char *current_long_filename(ucpp_context_t *ucpp_context);
 ucpp_EXPORT char *operators_name(int i);
 
-ucpp_EXPORT void ucpp_ouch(char *, ...);
-ucpp_EXPORT void ucpp_error(long, char *, ...);
-ucpp_EXPORT void ucpp_warning(long, char *, ...);
+ucpp_EXPORT void ucpp_ouch(ucpp_context_t *ucpp_context, char *, ...);
+ucpp_EXPORT void ucpp_error(ucpp_context_t *ucpp_context, long, char *, ...);
+ucpp_EXPORT void ucpp_warning(ucpp_context_t *ucpp_context, long, char *, ...);
 
 extern int *transient_characters;
 

@@ -12,42 +12,42 @@
 #define arith_op_s(op)	arith_strc(ARITH_TYPENAME, arith_strc(_s_, op))
 
 #define ARITH_DECL_MONO_U_U(op)    ARITH_FUNCTION_HEADER arith_u \
-                                   arith_op_u(op)(arith_u x)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, arith_u x)
 #define ARITH_DECL_MONO_U_S(op)    ARITH_FUNCTION_HEADER arith_s \
-                                   arith_op_u(op)(arith_u x)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, arith_u x)
 #define ARITH_DECL_MONO_U_I(op)    ARITH_FUNCTION_HEADER int \
-                                   arith_op_u(op)(arith_u x)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, arith_u x)
 #define ARITH_DECL_MONO_U_L(op)    ARITH_FUNCTION_HEADER unsigned long \
-                                   arith_op_u(op)(arith_u x)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, arith_u x)
 #define ARITH_DECL_MONO_S_U(op)    ARITH_FUNCTION_HEADER arith_u \
-                                   arith_op_s(op)(arith_s x)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, arith_s x)
 #define ARITH_DECL_MONO_S_S(op)    ARITH_FUNCTION_HEADER arith_s \
-                                   arith_op_s(op)(arith_s x)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, arith_s x)
 #define ARITH_DECL_MONO_S_I(op)    ARITH_FUNCTION_HEADER int \
-                                   arith_op_s(op)(arith_s x)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, arith_s x)
 #define ARITH_DECL_MONO_S_L(op)    ARITH_FUNCTION_HEADER long \
-                                   arith_op_s(op)(arith_s x)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, arith_s x)
 #define ARITH_DECL_MONO_I_U(op)    ARITH_FUNCTION_HEADER arith_u \
-                                   arith_op_u(op)(int x)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, int x)
 #define ARITH_DECL_MONO_L_U(op)    ARITH_FUNCTION_HEADER arith_u \
-                                   arith_op_u(op)(unsigned long x)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, unsigned long x)
 #define ARITH_DECL_MONO_I_S(op)    ARITH_FUNCTION_HEADER arith_s \
-                                   arith_op_s(op)(int x)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, int x)
 #define ARITH_DECL_MONO_L_S(op)    ARITH_FUNCTION_HEADER arith_s \
-                                   arith_op_s(op)(long x)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, long x)
 #define ARITH_DECL_MONO_ST_US(op)  ARITH_FUNCTION_HEADER char *arith_op_u(op) \
-                                   (char *c, arith_u *ru, arith_s *rs, int *sp)
+                                   (ucpp_context_t *ucpp_context, char *c, arith_u *ru, arith_s *rs, int *sp)
 
 #define ARITH_DECL_BI_UU_U(op)     ARITH_FUNCTION_HEADER arith_u \
-                                   arith_op_u(op)(arith_u x, arith_u y)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, arith_u x, arith_u y)
 #define ARITH_DECL_BI_UI_U(op)     ARITH_FUNCTION_HEADER arith_u \
-                                   arith_op_u(op)(arith_u x, int y)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, arith_u x, int y)
 #define ARITH_DECL_BI_UU_I(op)     ARITH_FUNCTION_HEADER int \
-                                   arith_op_u(op)(arith_u x, arith_u y)
+                                   arith_op_u(op)(ucpp_context_t *ucpp_context, arith_u x, arith_u y)
 #define ARITH_DECL_BI_SS_S(op)     ARITH_FUNCTION_HEADER arith_s \
-                                   arith_op_s(op)(arith_s x, arith_s y)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, arith_s x, arith_s y)
 #define ARITH_DECL_BI_SI_S(op)     ARITH_FUNCTION_HEADER arith_s \
-                                   arith_op_s(op)(arith_s x, int y)
+                                   arith_op_s(op)(ucpp_context_t *ucpp_context, arith_s x, int y)
 #define ARITH_DECL_BI_SS_I(op)     ARITH_FUNCTION_HEADER int \
                                    arith_op_s(op)(arith_s x, arith_s y)
 

@@ -177,7 +177,7 @@ static void *internal_get(HTT *htt, char *name, int reduced)
 }
 
 /* see nhash.h */
-void *HTT_get(HTT *htt, char *name)
+void *HTT_get(ucpp_context_t *ucpp_context, HTT *htt, char *name)
 {
 	return internal_get(htt, name, 0);
 }
@@ -277,7 +277,7 @@ static void *internal_put(HTT *htt, void *item, char *name, int reduced)
 }
 
 /* see nhash.h */
-void *HTT_put(HTT *htt, void *item, char *name)
+void *HTT_put(ucpp_context_t *ucpp_context, HTT *htt, void *item, char *name)
 {
 	return internal_put(htt, item, name, 0);
 }
@@ -399,7 +399,7 @@ static int internal_del(HTT *htt, char *name, int reduced)
 }
 
 /* see nhash.h */
-int HTT_del(HTT *htt, char *name)
+int HTT_del(ucpp_context_t *ucpp_context, HTT *htt, char *name)
 {
 	return internal_del(htt, name, 0);
 }
@@ -464,7 +464,7 @@ void HTT2_scan(HTT2 *htt, void (*action)(void *))
 }
 
 /* see nhash.h */
-void HTT_kill(HTT *htt)
+void HTT_kill(ucpp_context_t *ucpp_context, HTT *htt)
 {
 	unsigned u;
 
