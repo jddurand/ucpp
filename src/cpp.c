@@ -101,6 +101,22 @@ static char *system_assertions_def[] = { STD_ASSERT, 0 };
     }                                                                   \
   } while (0)
 
+typedef struct stringGenerator {
+  char         *s;      /* Pointer */
+  size_t        l;      /* Used size */
+  short         okb;    /* Status */
+  size_t        allocl; /* Allocated size */
+} stringGenerator_t;
+
+static const stringGenerator_t stringGeneratorTemplate = {
+  NULL, /* s */
+  0,    /* l */
+  0,    /* okb */
+  0     /* allocl */
+};
+
+static inline short appendOpaqueDataToStringGenerator(stringGenerator_t *stringGeneratorp, char *p, size_t sizel);
+
 #ifndef NO_UCPP_ERROR_FUNCTIONS
 /*
  * "ouch" is the name for an internal ucpp error. If AUDIT is not defined,
@@ -120,30 +136,148 @@ void ucpp_ouch(ucpp_context_t *ucpp_context, char *fmt, ...)
 	die();
 }
 
+static void generateStringWithLoggerCallback(void *userDatavp, genericLoggerLevel_t logLeveli, const char *msgs)
+{
+  appendOpaqueDataToStringGenerator((stringGenerator_t *) userDatavp, (char *) msgs, strlen(msgs));
+}
+
+#define CHUNKED_SIZE_UPPER(size, chunk) ((size) < (chunk)) ? (chunk) : ((1 + ((size) / (chunk))) * (chunk))
+static inline short appendOpaqueDataToStringGenerator(stringGenerator_t *stringGeneratorp, char *p, size_t sizel)
+{
+  char              *tmpp;
+  short              rcb;
+  size_t             allocl;
+  size_t             wantedl;
+
+  /* Note: caller must guarantee that p != NULL and l > 0 */
+
+  if (stringGeneratorp->s == NULL) {
+    /* Get an allocl that is a multiple of 1024 */
+    /* 1023 -> 1024 */
+    /* 1024 -> 2048 */
+    /* 2047 -> 2048 */
+    /* 2048 -> 3072 */
+    /* ... */
+    /* i.e. this is the upper multiple of 1024 and have space for the NUL byte */
+    allocl = CHUNKED_SIZE_UPPER(sizel, 1024);
+    /* Check for turn-around, should never happen */
+    if (allocl < sizel) {
+      goto err;
+    }
+    stringGeneratorp->s  = malloc(allocl);
+    if (stringGeneratorp->s == NULL) {
+      goto err;
+    }
+    memcpy(stringGeneratorp->s, p, sizel);
+    stringGeneratorp->allocl = allocl;
+    stringGeneratorp->l      = sizel + 1;  /* NUL byte is set at exit of the routine */
+    stringGeneratorp->okb    = 1;
+  } else if (stringGeneratorp->okb) {
+    wantedl = stringGeneratorp->l + sizel; /* +1 for the NUL is already accounted in stringGeneratorp->l */
+    allocl = CHUNKED_SIZE_UPPER(wantedl, 1024);
+    /* Check for turn-around, should never happen */
+    if (allocl < wantedl) {
+      goto err;
+    }
+    if (allocl > stringGeneratorp->allocl) {
+      tmpp = realloc(stringGeneratorp->s, allocl); /* The +1 for the NULL byte is already in */
+      if (tmpp == NULL) {
+        goto err;
+      }
+      stringGeneratorp->s      = tmpp;
+      stringGeneratorp->allocl = allocl;
+    }
+    memcpy(stringGeneratorp->s + stringGeneratorp->l - 1, p, sizel);
+    stringGeneratorp->l = wantedl; /* Already contains the +1 fir the NUL byte */
+  } else {
+    goto err;
+  }
+
+  stringGeneratorp->s[stringGeneratorp->l - 1] = '\0';
+  rcb = 1;
+  goto done;
+
+ err:
+  if (stringGeneratorp->s != NULL) {
+    free(stringGeneratorp->s);
+    stringGeneratorp->s = NULL;
+  }
+  stringGeneratorp->okb    = 0;
+  stringGeneratorp->l      = 0;
+  stringGeneratorp->allocl = 0;
+  rcb = 0;
+
+ done:
+  return rcb;
+}
+
 /*
  * report an error, with current_filename, line, and printf-like syntax
  */
 void ucpp_error(ucpp_context_t *ucpp_context, long line, char *fmt, ...)
 {
-	va_list ap;
+  va_list ap;
 
-	va_start(ap, fmt);
-	if (line > 0)
-		fprintf(stderr, "%s: line %ld: ", ucpp_context->current_filename, line);
-	else if (line == 0) fprintf(stderr, "%s: ", ucpp_context->current_filename);
-	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, "\n");
-	if (line >= 0) {
-		struct stack_context *sc = report_context(ucpp_context);
-		size_t i;
+  va_start(ap, fmt);
 
-		for (i = 0; sc[i].line >= 0; i ++)
-			fprintf(stderr, "\tincluded from %s:%ld\n",
-				sc[i].long_name ? sc[i].long_name : sc[i].name,
-				sc[i].line);
-		freemem(sc);
-	}
-	va_end(ap);
+  if (ucpp_context->genericLoggerp != NULL) {
+    stringGenerator_t stringGenerator;
+    genericLogger_t *genericLoggerp;
+
+    stringGenerator = stringGeneratorTemplate;
+    genericLoggerp = GENERICLOGGER_CUSTOM(generateStringWithLoggerCallback, (void *) &stringGenerator, GENERICLOGGER_LOGLEVEL_ERROR);
+    if (genericLoggerp != NULL) {
+      if (line > 0) {
+        GENERICLOGGER_ERRORF(genericLoggerp, "%s: line %ld: ", ucpp_context->current_filename, line);
+      }
+      else if (line == 0) {
+        GENERICLOGGER_ERRORF(genericLoggerp, "%s: ", ucpp_context->current_filename);
+      } else {
+        GENERICLOGGER_ERROR(genericLoggerp, "");
+      }
+      if (stringGenerator.okb) {
+        GENERICLOGGER_ERRORAP(genericLoggerp, fmt, ap);
+        if (stringGenerator.okb) {
+          GENERICLOGGER_ERROR(ucpp_context->genericLoggerp, stringGenerator.s);
+        }
+      }
+      if (stringGenerator.s != NULL) {
+        free(stringGenerator.s);
+      }
+      if (line >= 0) {
+        struct stack_context *sc = report_context(ucpp_context);
+        size_t i;
+
+        for (i = 0; sc[i].line >= 0; i ++)
+          GENERICLOGGER_ERRORF(ucpp_context->genericLoggerp, "\tincluded from %s:%ld",
+                  sc[i].long_name ? sc[i].long_name : sc[i].name,
+                  sc[i].line);
+        freemem(sc);
+      }
+      GENERICLOGGER_FREE(genericLoggerp);
+    }
+  }
+  else {
+    if (line > 0)
+      fprintf(stderr, "%s: line %ld: ",
+              ucpp_context->current_filename, line);
+    else if (line == 0)
+      fprintf(stderr, "%s: ", ucpp_context->current_filename);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    if (line >= 0) {
+      struct stack_context *sc = report_context(ucpp_context);
+      size_t i;
+
+      for (i = 0; sc[i].line >= 0; i ++)
+        fprintf(stderr, "\tincluded from %s:%ld\n",
+                sc[i].long_name ? sc[i].long_name : sc[i].name,
+                sc[i].line);
+      freemem(sc);
+    }
+  }
+
+  va_end(ap);
 }
 
 /*
@@ -151,28 +285,69 @@ void ucpp_error(ucpp_context_t *ucpp_context, long line, char *fmt, ...)
  */
 void ucpp_warning(ucpp_context_t *ucpp_context, long line, char *fmt, ...)
 {
-	va_list ap;
+  va_list ap;
 
-	va_start(ap, fmt);
-	if (line > 0)
-		fprintf(stderr, "%s: warning: line %ld: ",
-			ucpp_context->current_filename, line);
-	else if (line == 0)
-		fprintf(stderr, "%s: warning: ", ucpp_context->current_filename);
-	else fprintf(stderr, "warning: ");
-	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, "\n");
-	if (line >= 0) {
-		struct stack_context *sc = report_context(ucpp_context);
-		size_t i;
+  va_start(ap, fmt);
 
-		for (i = 0; sc[i].line >= 0; i ++)
-			fprintf(stderr, "\tincluded from %s:%ld\n",
-				sc[i].long_name ? sc[i].long_name : sc[i].name,
-				sc[i].line);
-		freemem(sc);
-	}
-	va_end(ap);
+  if (ucpp_context->genericLoggerp != NULL) {
+    stringGenerator_t stringGenerator;
+    genericLogger_t *genericLoggerp;
+
+    stringGenerator = stringGeneratorTemplate;
+    genericLoggerp = GENERICLOGGER_CUSTOM(generateStringWithLoggerCallback, (void *) &stringGenerator, GENERICLOGGER_LOGLEVEL_ERROR);
+    if (genericLoggerp != NULL) {
+      if (line > 0) {
+        GENERICLOGGER_ERRORF(genericLoggerp, "%s: line %ld: ", ucpp_context->current_filename, line);
+      }
+      else if (line == 0) {
+        GENERICLOGGER_ERRORF(genericLoggerp, "%s: ", ucpp_context->current_filename);
+      } else {
+        GENERICLOGGER_ERROR(genericLoggerp, "");
+      }
+      if (stringGenerator.okb) {
+        GENERICLOGGER_ERRORAP(genericLoggerp, fmt, ap);
+        if (stringGenerator.okb) {
+          GENERICLOGGER_ERROR(ucpp_context->genericLoggerp, stringGenerator.s);
+        }
+      }
+      if (stringGenerator.s != NULL) {
+        free(stringGenerator.s);
+      }
+      if (line >= 0) {
+        struct stack_context *sc = report_context(ucpp_context);
+        size_t i;
+
+        for (i = 0; sc[i].line >= 0; i ++)
+          GENERICLOGGER_ERRORF(ucpp_context->genericLoggerp, "\tincluded from %s:%ld",
+                  sc[i].long_name ? sc[i].long_name : sc[i].name,
+                  sc[i].line);
+        freemem(sc);
+      }
+      GENERICLOGGER_FREE(genericLoggerp);
+    }
+  }
+  else {
+    if (line > 0)
+      fprintf(stderr, "%s: warning: line %ld: ",
+              ucpp_context->current_filename, line);
+    else if (line == 0)
+      fprintf(stderr, "%s: warning: ", ucpp_context->current_filename);
+    else fprintf(stderr, "warning: ");
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    if (line >= 0) {
+      struct stack_context *sc = report_context(ucpp_context);
+      size_t i;
+
+      for (i = 0; sc[i].line >= 0; i ++)
+        fprintf(stderr, "\tincluded from %s:%ld\n",
+                sc[i].long_name ? sc[i].long_name : sc[i].name,
+                sc[i].line);
+      freemem(sc);
+    }
+  }
+
+  va_end(ap);
 }
 #endif	/* NO_UCPP_ERROR_FUNCTIONS */
 

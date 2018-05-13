@@ -354,6 +354,7 @@ ucpp_context_t *init_cppm(void)
         ucpp_context->protect_detect;
         ucpp_context->protect_detect_stack = 0;
         ucpp_context->ls_depth = 0;
+        ucpp_context->genericLoggerp = NULL;
 
 	for (i = 0; i < MSTATE; i ++) {
 		for (j = 0; j < MAX_CHAR_VAL; j ++) ucpp_context->cppm[i][j] = S_OUCH;
