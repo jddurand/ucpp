@@ -145,6 +145,11 @@ MYPACKAGETESTEXECUTABLE(atest_simul test/atest.c)
 TARGET_COMPILE_OPTIONS(atest_simul PUBLIC "-DTEST_SIMUL")
 MYPACKAGETESTEXECUTABLE(sample test/sample.c)
 
+################
+# Dependencies #
+################
+MYPACKAGEDEPENDENCY (genericLogger "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/github/genericLogger" LIBS)
+
 #########
 # Tests #
 #########

@@ -51,6 +51,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #endif
+#include <genericLogger.h>
 
 /*
  * The standard path where includes are looked for.
@@ -67,6 +68,38 @@ FILE *emit_output;
 static char *system_macros_def[] = { STD_MACROS, 0 };
 static char *system_assertions_def[] = { STD_ASSERT, 0 };
 #endif
+
+#define UCPP_ERRORF(ucpp_context, fmt, ...) do {                        \
+    if (ucpp_context->genericLoggerp != NULL) {                         \
+      GENERICLOGGER_ERRORF(ucpp_context->genericLoggerp, fmt, __VA_ARGS__); \
+    } else {                                                            \
+      fprintf(stderr, fmt, __VA_ARGS__);                                \
+    }                                                                   \
+  } while (0)
+
+#define UCPP_ERRORAP(ucpp_context, fmt, ap) do {                        \
+    if (ucpp_context->genericLoggerp != NULL) {                         \
+      GENERICLOGGER_ERRORAP(ucpp_context->genericLoggerp, fmt, ap);     \
+    } else {                                                            \
+      vfprintf(stderr, fmt, ap);                                        \
+    }                                                                   \
+  } while (0)
+
+#define UCPP_WARNF(ucpp_context, fmt, ...) do {                         \
+    if (ucpp_context->genericLoggerp != NULL) {                         \
+      GENERICLOGGER_WARNF(ucpp_context->genericLoggerp, fmt, __VA_ARGS__); \
+    } else {                                                            \
+      fprintf(stderr, fmt, __VA_ARGS__);                                \
+    }                                                                   \
+  } while (0)
+
+#define UCPP_WARNAP(ucpp_context, fmt, ap) do {                         \
+    if (ucpp_context->genericLoggerp != NULL) {                         \
+      GENERICLOGGER_WARNAP(ucpp_context->genericLoggerp, fmt, ap);      \
+    } else {                                                            \
+      vfprintf(stderr, fmt, ap);                                        \
+    }                                                                   \
+  } while (0)
 
 #ifndef NO_UCPP_ERROR_FUNCTIONS
 /*

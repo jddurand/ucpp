@@ -3,6 +3,7 @@
 
 #include <ucpp/tune.h>
 #include <setjmp.h>
+#include <genericLogger.h>
 
 /* order is important */
 enum {
@@ -127,6 +128,10 @@ struct ucpp_context {
 #endif
   struct file_context *ls_stack;
   size_t ls_depth;
+  /*
+   * Logging
+   */
+  genericLogger_t *genericLoggerp;
 };
 
 #endif /* UCPP_INTERNAL_CONTEXT_H */
